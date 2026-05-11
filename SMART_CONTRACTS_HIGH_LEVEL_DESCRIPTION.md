@@ -95,6 +95,14 @@ transfer.approve + cold + eth
 generate_address.approve + customer + none
 ```
 
+Off-chain services must hash policy tokens using the same convention as the contracts:
+
+- action types are string names such as `transfer.process` and `transfer.approve`,
+- asset types are normalized string symbols such as `eth`, `usdt`, or `usdc`,
+- wallet types are normalized to lowercase kebab-case before hashing, such as `customer`, `hot`, or `customer-cold`.
+
+Backend, processing, and MPC must keep this normalization aligned because policy checks are executed by off-chain services before custody actions are completed.
+
 ## Process Policies
 
 Process policies define whether a role is allowed to initiate/process an action for a given tuple and amount segment.
@@ -141,8 +149,9 @@ This allows policy to become stricter as transaction amount increases.
 It is designed to validate that an address was generated/attested by a trusted signer set for a specific:
 
 - address,
-- chain type,
+- address format,
 - wallet type,
+- public key,
 - issuance timestamp.
 
 The verifier stores:
@@ -160,29 +169,29 @@ This contract can be used by external systems or partners to verify that a gener
 Address attestation binds the proof to:
 
 - FortVault attestation domain,
-- generated address,
-- chain type,
 - wallet type,
+- derived public key,
 - issued-at timestamp.
 
-The attestation payload can use chain type instead of full chain reference:
+The MPC attestation payload signs the derived public key and wallet context, not the final visible blockchain address:
 
 ```json
 {
-  "chainType": "evm",
   "walletType": "customer",
-  "address": "0x...",
+  "publicKey": "0x04...",
   "issuedAt": 1770000000
 }
 ```
 
-Expected chain-type values include:
+The verifier receives the visible address and address format separately, then derives/checks the address from the attested public key.
+
+Expected address-format values can include:
 
 - `evm`
-- `tron`
-- `utxo`
+- `tron-base58`
+- `btc-p2wpkh`
 
-This reflects the fact that address ownership is tied to address/key family, not necessarily to one specific EVM network. For example, the same ECDSA public key controls the same `0x...` address across Ethereum, Avalanche, Horizon, and other EVM-compatible networks.
+This keeps MPC focused on key ownership while the verifier contract handles address-format validation. For example, the same ECDSA public key can be represented as an EVM address, a Tron address, or a Bitcoin P2WPKH address, depending on the selected format.
 
 The verifier validates that enough unique trusted MPC attestation signers signed the expected digest. The threshold and signer set are configured in the verifier contract.
 
@@ -244,6 +253,8 @@ They do:
 - expose policy checks/configuration for off-chain enforcement,
 - provide an on-chain source of truth for policy state.
 
+Transfer execution services use the policy contracts as a read-only authorization source before signing/broadcasting. Processing checks policy before constructing executable transactions, and MPC can independently re-check policy before participating in threshold signing.
+
 ## Operational Assumptions
 
 The smart-contract security model assumes:
@@ -267,6 +278,7 @@ Auditors should review:
 - address-attestation digest construction in `FortVaultAddressVerifier`, including exact field order and string normalization rules.
 - trusted signer uniqueness and threshold enforcement in `FortVaultAddressVerifier`.
 - whether the verifier digest matches the MPC attestation digest implementation.
+- whether processing and MPC policy-token normalization exactly matches contract bootstrap data.
 - bootstrap scripts and policy JSON used in production.
 - whether off-chain services correctly enforce contract policy outputs.
 

@@ -15,11 +15,11 @@ This design reduces compromise blast radius and centralizes transaction executio
 ## 2. System Components
 - `fortvault-frontend` (React): admin/partner user interface.
 - `fortvault-backend` (Node.js): back-office API, primary business-logic layer, and system of record for customer/partner/admin domain data (customer profiles, vault metadata, operational actions, and related back-office entities). It orchestrates workflows and publishes custody commands/events.
-- `fortvault-processing` (Node.js): custody execution engine (address generation, transfer orchestration, MPC integration, broadcast, state machine, idempotency).
-- `fortvault-mpc` (Go): distributed threshold-signing service (key shares, keygen, derive, sign).
+- `fortvault-processing` (Node.js): custody execution engine (address generation, transfer orchestration, transfer authorization verification, MPC integration, broadcast, state machine, idempotency).
+- `fortvault-mpc` (Go): distributed threshold-signing service (key shares, keygen, derive, sign, independent transaction/policy verification before signing).
 - `fortvault-listener` (Node.js): blockchain event listener (deposit/confirmation/tx status feeds).
 - `fortvault-notification` (Node.js): outbound notifications (email/Telegram).
-- `fortvault-contracts` (Hardhat/Solidity): on-chain policy registry (planned/extended policy control path).
+- `fortvault-contracts` (Hardhat/Solidity): on-chain policy registry, policy engine, and address-proof verifier.
 - `fortvault-messaging` (shared library): typed Redis Streams publish/consume envelope and payload contracts.
 
 ## 3. High-Level Data Flow
@@ -79,8 +79,9 @@ flowchart LR
   end
 
   PROC -->|HTTPS keygen / derive / sign| MPC1
-  PROC -->|HTTPS keygen / derive / sign| MPC2
-  PROC -->|HTTPS keygen / derive / sign| MPC3
+  MPC1 <-->|encrypted MPC protocol| MPC2
+  MPC1 <-->|encrypted MPC protocol| MPC3
+  MPC2 <-->|encrypted MPC protocol| MPC3
 
   MPC1 -->|read policy| SC
   MPC2 -->|read policy| SC
@@ -117,13 +118,15 @@ Security consequence:
 - Keys are generated and held as MPC shares (no single private key on one node).
 - Threshold model requires quorum to produce signatures.
 - HD workflow for ECDSA supports root generation and child derivation.
-- Planned control extension: MPC-side policy/approval verification before signing.
+- MPC-side transaction, authorization, and policy verification before signing.
 
 ### 5.3 Transaction Governance
 - Processing enforces action state machine:
   - `CREATED/PENDING_APPROVALS -> APPROVED_READY -> SIGNING -> BROADCASTED -> CONFIRMED`
   - failure branches: `FAILED_RETRYABLE`, `FAILED_FINAL`
 - Idempotency controls prevent duplicate execution on retries/replays.
+- Transfer authorization is checked before execution using EIP-712 signatures, action metadata, source-wallet metadata, and on-chain policy checks.
+- MPC re-checks transfer authorization and validates the raw transaction before threshold signing.
 
 ## 6. Persistence and Data Ownership
 - Each service has its own PostgreSQL database as source of truth.
@@ -141,6 +144,7 @@ This model supports deterministic restart recovery and audit reconstruction.
 - Input: `evt.generate_address.process`
 - Processing validates partner/chain/wallet type, allocates HD index, calls MPC keygen/derive.
 - Output: `evt.generate_address.completed` (success or failed status payload).
+- Generated address responses can include an MPC attestation proof over the derived public key and wallet context.
 
 ### 7.2 Transfers
 - Input: `evt.transfer.process`
@@ -148,7 +152,10 @@ This model supports deterministic restart recovery and audit reconstruction.
   - EVM native transfers
   - ERC20 transfers
   - Tron native transfers
-- TRC20 transfers
+  - TRC20 transfers
+  - Bitcoin native transfers with constrained transaction shape
+- Processing validates transfer signatures, policy context, source wallet metadata, and transaction parameters.
+- MPC independently verifies the same transfer authorization payload and validates the raw transaction before signing.
 - Processing requests MPC signature, validates signature applicability, broadcasts tx, tracks receipt, publishes completion status.
 
 ## 8. Compliance Positioning Notes

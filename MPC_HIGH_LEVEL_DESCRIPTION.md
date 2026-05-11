@@ -53,10 +53,9 @@ High-level flow:
 4. Processing calls MPC `/tss/derive` with:
    - root public key,
    - derivation index,
-   - wallet type,
-   - chain type.
+   - wallet type.
 5. MPC derives the child public key.
-6. MPC can derive the chain-type-specific address from the child public key and collect address attestations from the MPC nodes.
+6. MPC can collect public-key attestations from the MPC nodes.
 7. Processing stores/publishes the generated address and attestation proof to backend.
 
 Supported address formats include:
@@ -71,37 +70,32 @@ Address attestation is designed to let a partner or auditor verify that an addre
 
 Processing calls only the API-facing master MPC node. Processing does not call each MPC node directly.
 
-During `/tss/derive` with address attestation:
+During `/tss/derive` with public-key attestation:
 
 1. The master MPC verifies that the required MPC nodes are available.
 2. The master MPC derives the child public key locally.
-3. The master MPC computes the address for the requested chain type:
-   - `evm`,
-   - `tron`,
-   - `utxo`.
+3. The master MPC converts the derived compressed child public key into uncompressed secp256k1 public-key form.
 4. The master MPC builds an attestation payload:
 
 ```json
 {
-  "chainType": "evm",
   "walletType": "customer",
-  "address": "0x...",
+  "publicKey": "0x04...",
   "issuedAt": 1770000000
 }
 ```
 
 5. The master MPC signs the payload with its own address-attestation key.
 6. The master MPC sends the same derivation message and attestation context to each remote MPC node over the existing encrypted gRPC transport.
-7. Each remote MPC node derives/stores the child key locally, verifies the address and wallet type, signs the same attestation payload, and returns its signature.
+7. Each remote MPC node derives/stores the child key locally, verifies the public key and wallet type, signs the same attestation payload, and returns its signature.
 8. The master MPC verifies every returned attestation signature before returning the proof to processing.
 
 The proof returned by MPC has the following shape:
 
 ```json
 {
-  "chainType": "evm",
   "walletType": "customer",
-  "address": "0x...",
+  "publicKey": "0x04...",
   "issuedAt": 1770000000,
   "signatures": [
     {
@@ -121,7 +115,9 @@ The strict address-attestation mode can be configured so that:
 - the master must verify all returned signatures,
 - otherwise `/tss/derive` fails.
 
-The attestation signer key is separate from the MPC custody key share. It proves that an MPC node attested the generated address; it does not allow custody signing or fund movement.
+The attestation signer key is separate from the MPC custody key share. It proves that an MPC node attested the derived public key and wallet context; it does not allow custody signing or fund movement.
+
+The visible blockchain address is verified separately by deriving the address from the attested public key according to the selected address format, such as EVM, Tron Base58, or Bitcoin P2WPKH.
 
 ## Transaction Signing
 
@@ -131,12 +127,13 @@ High-level flow:
 
 1. Backend creates and approves a transfer action.
 2. Processing consumes the transfer process event.
-3. Processing validates chain, asset, wallet type, source address, destination address, amount, and policy context.
+3. Processing validates chain, asset, wallet type, source address, destination address, amount, EIP-712 signature domain, approval signatures, and policy context.
 4. Processing builds an unsigned transaction.
-5. Processing calls MPC `/tss/sign`.
-6. MPC validates the raw transaction against network-specific validators.
-7. MPC nodes execute a threshold signing ceremony.
-8. Processing receives the signature, builds the final transaction, and broadcasts it.
+5. Processing calls MPC `/tss/sign` with the raw transaction and the full transfer authorization payload.
+6. MPC independently verifies the transfer authorization payload, including signature domain, signed payload freshness, approval signatures, and on-chain policy checks.
+7. MPC validates the raw transaction against network-specific validators and checks that the transaction facts match the authorization payload.
+8. MPC nodes execute a threshold signing ceremony.
+9. Processing receives the signature, builds the final transaction, and broadcasts it.
 
 ### Independent Approval Verification
 
@@ -151,6 +148,23 @@ This creates an additional defense layer:
 - MPC re-validates approvals and policy before threshold signing.
 
 The intended result is that even if an upstream service is compromised, MPC nodes do not blindly sign a transaction unless the required admin/operator signatures and policy conditions are valid.
+
+For transfer authorization, the signed EIP-712 domain is expected to be:
+
+```json
+{
+  "name": "FortVault",
+  "version": "1",
+  "chainId": 1
+}
+```
+
+Processing validates this domain before transaction construction. MPC validates the same domain before signing. MPC also enforces a signed-payload freshness window so stale approvals cannot be replayed indefinitely.
+
+MPC policy-token hashing follows the smart-contract convention:
+
+- action types and asset types are trimmed/lowercased before hashing, for example `transfer.process` and `usdt`,
+- wallet types are normalized to lowercase kebab-case before hashing, for example `Customer Cold` becomes `customer-cold`.
 
 ## Network Validators
 
@@ -261,7 +275,9 @@ The MPC security model assumes:
 - Bitcoin support may be limited to native BTC depending on deployment scope.
 - Bitcoin transfer validation supports a constrained transaction shape and should be reviewed carefully against expected production BTC flows.
 - The policy layer is partly enforced in MPC code and partly represented in smart contracts/off-chain services. Auditors should review both layers together.
-- Address attestation proves that an MPC node set attested a generated address context. It is not a replacement for transaction authorization, transaction validation, or threshold transaction signing.
+- Transfer authorization is intentionally checked in multiple layers. Backend, processing, and MPC must keep EIP-712 field construction, domain rules, token normalization, and policy-token hashing aligned.
+- MPC-side transfer authorization returns generic API errors to callers while detailed rejection reasons are logged by the MPC node. Operational monitoring should include MPC logs for audit and incident analysis.
+- Address attestation proves that an MPC node set attested a derived public key and wallet context. It is not a replacement for transaction authorization, transaction validation, or threshold transaction signing.
 - Runtime security depends on deployment isolation, secret management, and network ACLs in addition to source-code controls.
 
 ## Relevant Source Areas
