@@ -1,0 +1,77 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Length 1783 >>
+stream
+BT /F2 22 Tf 1 0 0 1 72 706 Tm (FortVault Weekly Release Notes) Tj ET
+BT /F1 11 Tf 1 0 0 1 72 666 Tm (Release Notes) Tj ET
+BT /F1 11 Tf 1 0 0 1 72 648 Tm (Week ending: June 1, 2026) Tj ET
+BT /F2 16 Tf 1 0 0 1 72 612 Tm (Updates) Tj ET
+BT /F2 14 Tf 1 0 0 1 72 571 Tm (Profile) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 541 Tm (- Implemented the new profile page design.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 523 Tm (- Updated the header profile section to match the new design.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 505 Tm (- Added profile image support.) Tj ET
+BT /F2 14 Tf 1 0 0 1 72 471 Tm (Assets) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 441 Tm (- Added sorting support to Assets page lists.) Tj ET
+BT /F2 14 Tf 1 0 0 1 72 407 Tm (Customers) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 377 Tm (- Added dynamic filters to the Customers page.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 359 Tm (- Moved sorting controls from the page header into the table columns.) Tj ET
+BT /F2 14 Tf 1 0 0 1 72 325 Tm (Whitelisted Addresses) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 295 Tm (- Split whitelisted addresses into Global and Customer-specific views.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 277 Tm (- Added dynamic filters.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 259 Tm (- Moved sorting controls from the page header into the table columns.) Tj ET
+BT /F2 14 Tf 1 0 0 1 72 225 Tm (History) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 195 Tm (- Redesigned the History page.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 177 Tm (- Split History into separate Transactions and Actions tabs.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 159 Tm (- Added backend-side search.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 141 Tm (- Added dynamic filters.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 123 Tm (- Moved sorting controls from the page header into the table columns.) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 105 Tm (- Added transaction fee display.) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 491 >>
+stream
+BT /F2 14 Tf 1 0 0 1 72 710 Tm (Reports) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 680 Tm (- Added transaction fee display.) Tj ET
+BT /F2 14 Tf 1 0 0 1 72 646 Tm (Bulk Address Generation) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 616 Tm (- Fully implemented bulk generate address functionality.) Tj ET
+BT /F2 14 Tf 1 0 0 1 72 582 Tm (Notifications) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 552 Tm (- Fixed transaction notification issues where the wrong currency could be) Tj ET
+BT /F1 11 Tf 1 0 0 1 86 536 Tm (  shown.) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 7 0 R >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000272 00000 n 
+0000002107 00000 n 
+0000002243 00000 n 
+0000002785 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+2921
+%%EOF
