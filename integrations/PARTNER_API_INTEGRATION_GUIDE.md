@@ -299,7 +299,7 @@ Action authorization uses resource-specific scope sets:
 | ------- | ---- | ------------------ | ----------------- |
 | Generate address; archive/activate a vault or customer address asset | `addresses:read` | `addresses:actions:initiate` | `addresses:actions:review` |
 | Transfer | `transfers:read` | `transfers:actions:initiate` | `transfers:actions:review` |
-| Create or archive/activate a whitelist address | `whitelist-addresses:read` | `whitelist-addresses:actions:initiate` | `whitelist-addresses:actions:review` |
+| Existing whitelist creation or archive/activate actions | `whitelist-addresses:read` | `whitelist-addresses:actions:initiate` (cancel only through Partner API) | `whitelist-addresses:actions:review` |
 | Archive/activate a regular vault | `vaults:read` | `vaults:actions:initiate` | `vaults:actions:review` |
 | Archive/activate a customer | `customers:read` | `customers:actions:initiate` | `customers:actions:review` |
 | Archive/activate an exchange account | `exchange-accounts:read` | `exchange-accounts:actions:initiate` | `exchange-accounts:actions:review` |
@@ -602,6 +602,48 @@ Action details identify vaults and customers by ID. They do not return
 `vaultName` or `customerName`. The API also never returns action signatures,
 signed payloads, API public keys, private keys, raw MPC responses, or internal
 action errors in `details`.
+
+### 5.5 Whitelist address (WL) support
+
+The Partner API supports reading and reviewing existing whitelist-address
+actions. It does **not** expose dedicated endpoints to list or retrieve whitelist
+address records, create whitelist addresses, or initiate their archive/activate
+requests. Initiate those requests through the dashboard. The presence of a
+`whitelist-addresses:*` scope does not imply those endpoints exist.
+
+Both `whitelist_address` (creation) and `whitelist_address_status_change`
+(archive/activate) use these generic endpoints. Paths below are relative to
+`/partner-api/v1`:
+
+| Operation | Method and path | Required API-client scopes |
+| --------- | --------------- | -------------------------- |
+| List WL actions | `GET /actions?actionType=whitelist_address` or `GET /actions?actionType=whitelist_address_status_change` | `whitelist-addresses:read` |
+| Read one WL action | `GET /actions/{actionId}` | `whitelist-addresses:read` |
+| Prepare approve/reject typed data | `POST /actions/{actionId}/typed-data` | `whitelist-addresses:read` plus `whitelist-addresses:actions:review` |
+| Approve or reject | `POST /actions/{actionId}/approve` or `/reject` | `whitelist-addresses:read` plus `whitelist-addresses:actions:review` |
+| Prepare cancellation typed data or cancel | `POST /actions/{actionId}/typed-data` or `/cancel` | `whitelist-addresses:read` plus `whitelist-addresses:actions:initiate` |
+
+For example, discover pending creation and status-change requests separately:
+
+```http
+GET /partner-api/v1/actions?actionType=whitelist_address&status=pending&skip=0&take=50
+GET /partner-api/v1/actions?actionType=whitelist_address_status_change&status=pending&skip=0&take=50
+```
+
+Authenticate each request with a fresh JWT. These endpoints return action
+records, not a whitelist-address directory; use the action `id` for subsequent
+review requests. The action-specific `details` fields are listed in section 5.4.
+
+Use the canonical typed-data preparation and signing flow in
+[section 9.2](#92-approve-reject-or-cancel), selecting `approve`, `reject`, or
+`cancel` as the operation. Mutations require an `Idempotency-Key`; typed-data
+preparation does not. Do not construct a WL initiation payload for the Partner
+API: no corresponding initiation endpoint is currently exposed.
+
+API-client scopes do not replace signing-user authorization. Approval/rejection
+requires the signing user's `vaults:actions:whitelist:review` permission and the
+applicable workspace policy checks. Cancellation must be signed by the original
+initiator. Tenant scope and action-state checks apply to every operation.
 
 ## 6. Pagination and Filtering
 
