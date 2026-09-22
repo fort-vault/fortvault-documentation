@@ -242,6 +242,8 @@ Never log the JWT, private key, action-signing key, or full authorization header
 | `addresses:read` plus entity scope    | `GET /addresses`      | List vault addresses              |
 | `balances:read` plus entity scope     | `GET /balances`       | List exact vault balances         |
 | `transactions:read` plus entity scope | `GET /transactions`   | List vault transaction movements  |
+| `whitelist-addresses:read` | `GET /whitelist-addresses` | List persisted WL records |
+| `whitelist-addresses:read` | `GET /whitelist-addresses/{id}` | Get one active or archived WL record |
 | Resource read scope                   | `GET /actions`        | List authorized action summaries  |
 | Resource read scope                   | `GET /actions/{id}`   | Get one authorized action         |
 | Resource read plus operation scope    | `POST /actions/{id}/typed-data` | Prepare canonical operation typed data |
@@ -260,6 +262,9 @@ Never log the JWT, private key, action-signing key, or full authorization header
 | `vaults:create`            | `POST /vaults`                   | Create a regular workspace vault     |
 | `addresses:actions:initiate` | `POST /generate-address-actions` | Initiate address generation          |
 | `transfers:actions:initiate` | `POST /transfer-actions`         | Initiate a transfer                  |
+| `transfers:actions:initiate` plus resource read scopes | `POST /transfer-actions/typed-data` | Prepare transfer initiation from IDs; see section 10.0 for required read scopes |
+| `whitelist-addresses:read` plus `whitelist-addresses:actions:initiate` | `POST /whitelist-address-actions` | Initiate WL creation |
+| `whitelist-addresses:read` plus `whitelist-addresses:actions:initiate` | `PUT /whitelist-addresses/{id}/archive` or `/activate` | Initiate WL status change |
 | `vaults:read` plus `vaults:actions:initiate` | `PUT /vaults/{id}/archive` or `/activate` | Initiate regular-vault status change |
 | `customers:read` plus `customers:actions:initiate` | `PUT /customers/{id}/archive` or `/activate` | Initiate customer status change |
 | `addresses:read` plus `addresses:actions:initiate` | `PUT /vault-address-assets/{id}/archive` or `/activate` | Initiate address-asset status change |
@@ -299,7 +304,7 @@ Action authorization uses resource-specific scope sets:
 | ------- | ---- | ------------------ | ----------------- |
 | Generate address; archive/activate a vault or customer address asset | `addresses:read` | `addresses:actions:initiate` | `addresses:actions:review` |
 | Transfer | `transfers:read` | `transfers:actions:initiate` | `transfers:actions:review` |
-| Existing whitelist creation or archive/activate actions | `whitelist-addresses:read` | `whitelist-addresses:actions:initiate` (cancel only through Partner API) | `whitelist-addresses:actions:review` |
+| Create or archive/activate a whitelist address | `whitelist-addresses:read` | `whitelist-addresses:actions:initiate` | `whitelist-addresses:actions:review` |
 | Archive/activate a regular vault | `vaults:read` | `vaults:actions:initiate` | `vaults:actions:review` |
 | Archive/activate a customer | `customers:read` | `customers:actions:initiate` | `customers:actions:review` |
 | Archive/activate an exchange account | `exchange-accounts:read` | `exchange-accounts:actions:initiate` | `exchange-accounts:actions:review` |
@@ -605,11 +610,30 @@ action errors in `details`.
 
 ### 5.5 Whitelist address (WL) support
 
-The Partner API supports reading and reviewing existing whitelist-address
-actions. It does **not** expose dedicated endpoints to list or retrieve whitelist
-address records, create whitelist addresses, or initiate their archive/activate
-requests. Initiate those requests through the dashboard. The presence of a
-`whitelist-addresses:*` scope does not imply those endpoints exist.
+The Partner API supports WL record list/detail, signed creation requests, and
+signed archive/activate requests. Paths below are relative to `/partner-api/v1`.
+
+| Operation | Method and path | Required API-client scopes | Success |
+| --------- | --------------- | -------------------------- | ------- |
+| List persisted records | `GET /whitelist-addresses` | `whitelist-addresses:read` | 200 |
+| Read one persisted record | `GET /whitelist-addresses/{id}` | `whitelist-addresses:read` | 200 |
+| Request creation | `POST /whitelist-address-actions` | `whitelist-addresses:read` plus `whitelist-addresses:actions:initiate` | 201 |
+| Request archival | `PUT /whitelist-addresses/{id}/archive` | `whitelist-addresses:read` plus `whitelist-addresses:actions:initiate` | 200 |
+| Request activation | `PUT /whitelist-addresses/{id}/activate` | `whitelist-addresses:read` plus `whitelist-addresses:actions:initiate` | 200 |
+
+List filters are optional `status` (`active` or `archived`), `accessType`
+(`all`, `internal`, `customer`), `customerId` (UUID), and `assetId` (UUID), plus
+`skip`, `take`, and `order` from section 6. Without filters, both active and
+archived records are included. Tenant and filter predicates apply before count
+and pagination. The response is `{data, total, skip, take}`. Each record (and the
+detail response) has exactly `id`, `name`, `address`, `assetId`, `customerId`
+(UUID or null), `accessType`, `custodyType`, `ownershipType`, `status`, `createdAt`,
+and `updatedAt`. Timestamps are ISO date-time strings. Missing or foreign-tenant
+IDs return 404 without revealing another tenant's records.
+
+Pending creation requests are actions, not persisted WL records. Creation and
+status requests remain subject to policy approval/execution; a successful HTTP
+response does not itself mean that the address is usable or its status changed.
 
 Both `whitelist_address` (creation) and `whitelist_address_status_change`
 (archive/activate) use these generic endpoints. Paths below are relative to
@@ -637,13 +661,174 @@ review requests. The action-specific `details` fields are listed in section 5.4.
 Use the canonical typed-data preparation and signing flow in
 [section 9.2](#92-approve-reject-or-cancel), selecting `approve`, `reject`, or
 `cancel` as the operation. Mutations require an `Idempotency-Key`; typed-data
-preparation does not. Do not construct a WL initiation payload for the Partner
-API: no corresponding initiation endpoint is currently exposed.
+preparation does not. The exact initiation contracts follow below.
 
-API-client scopes do not replace signing-user authorization. Approval/rejection
+API-client scopes do not replace signing-user authorization. Initiation requires
+`vaults:actions:whitelist:initiate`. Approval/rejection
 requires the signing user's `vaults:actions:whitelist:review` permission and the
 applicable workspace policy checks. Cancellation must be signed by the original
 initiator. Tenant scope and action-state checks apply to every operation.
+
+#### 5.5.1 Exact WL initiation signing contract
+
+All three operations use `primaryType: "Initiate"`. The domain is exactly
+`{"name":"FortVault","version":"1","chainId":1}`, including numeric `chainId`
+even when the address is on Tron or Bitcoin. Every message field has EIP-712
+type `string`, including `TimestampMs` and the customer UUID.
+
+Construct top-level properties in this order: `domain`, `primaryType`, `types`,
+`message`. Domain properties must be ordered `name`, `version`, `chainId`.
+`types` contains only `Initiate`; do not add `EIP712Domain`. Each type entry is
+ordered `name`, `type`. Message properties follow the field order below.
+The backend compares parsed payloads with `JSON.stringify`, so property order
+matters as well as values. Send `signedPayload = JSON.stringify(typedData)` and
+the wallet signature over that same typed data. Use a fresh Ed25519 JWT for HTTP
+authentication separately.
+
+`TimestampMs` is always last: current Unix milliseconds as a decimal string of
+at least 13 digits, not a JSON number. Omit an absent optional field from **both**
+`types.Initiate` and `message`; do not use null, an empty string, or an extra type
+entry as a placeholder. No extra fields are accepted in the signed payload.
+
+**Creation: `POST /whitelist-address-actions`**
+
+Body fields: `name`, `address`, `assetId`, `custodyType`, `ownershipType`,
+`signedPayload`, `signature`, and optional `customerId` and `accessType`.
+There is no creation `comment` field. Name length is 3-30 after normalization.
+
+| Order | Signed field | Exact value |
+| ----- | ------------ | ----------- |
+| 1 | `Action` | `Whitelist Address` |
+| 2 | `Name` | Normalized request `name` |
+| 3 | `Address` | Chain-normalized request address, as specified below |
+| 4 | `Asset` | Asset `symbol` + ` on ` + chain `name`, e.g. `USDC on Ethereum` |
+| 5, optional | `Customer` | The `customerId` UUID, **not** customer name or code; omit for non-customer scope |
+| 6 | `Scope` | `all` -> `Global`; `internal` -> `Internal`; `customer` -> `Customer` |
+| 7 | `Custody` | `self_custodied` -> `Self-Custodied`; `custodian_managed` -> `Custodian-Managed` |
+| 8 | `Ownership` | `owned` -> `Owned`; `external` -> `External` |
+| 9 | `TimestampMs` | Decimal milliseconds string |
+
+With `customerId`, scope resolves to `customer`; if `accessType` is supplied it
+must be `customer`, and `ownershipType` must be `external`. Without `customerId`,
+scope defaults to `all`; `internal` is also allowed, but `customer` is invalid.
+Omit optional request properties when unused. `custodyType` and `ownershipType`
+are required even though the underlying service has internal defaults.
+
+Creation address normalization uses the selected asset's `chainRef`:
+
+- Trim leading/trailing whitespace.
+- For `evm:*`, lowercase the valid 40-hex-character `0x` address. Sign lowercase,
+  not a checksum-cased display address.
+- For `bitcoin:*`, lowercase Bech32/Bech32m addresses beginning `bc1` or `tb1`.
+- Preserve case for Bitcoin Base58 and Tron Base58 addresses. Never lowercase
+  all chains indiscriminately. Chain-specific validity checks still apply.
+
+Name normalization is JavaScript `value.trim().replace(/\s\s+/g, " ")`.
+This collapses runs of two or more whitespace characters, not every individual
+internal whitespace character. Normalize request name before signing it.
+
+Discover asset metadata using `/assets` and `/chains` (`assets:read`). Match the
+selected `assetId` and its chain; do not derive display labels from chainRef or
+symbol guesses.
+
+**Archive and activate: `PUT /whitelist-addresses/{id}/archive` or `/activate`**
+
+Body fields: `signedPayload`, `signature`, and optional `comment` (maximum 500
+characters after HTTP normalization). The target WL ID comes from the URL.
+
+| Order | Signed field | Exact value |
+| ----- | ------------ | ----------- |
+| 1 | `Action` | Archive: `Archive Whitelist Address`; activate: **`Unarchive Whitelist Address`**, never `Activate Whitelist Address` |
+| 2 | `Name` | Persisted WL `name`, unchanged |
+| 3 | `Address` | Persisted WL `address`, unchanged |
+| 4 | `Asset` | Current asset `symbol` + ` on ` + current chain `name` |
+| 5, optional | `Customer` | Current customer name as defined below, **not** the UUID used at creation |
+| 6, optional | `Comment` | Normalized nonblank request comment |
+| 7 | `TimestampMs` | Decimal milliseconds string |
+
+Fetch the WL record immediately before signing. For status changes, use the
+stored address exactly, including any legacy casing; do not run creation-time
+address normalization again. Do not include Scope, Custody, Ownership, assetId,
+whitelistAddressId, operation, or status in the signed message.
+
+For a customer-scoped record, fetch `/customers/{customerId}` (`customers:read`
+required for this discovery request). Compute Customer exactly as
+`[firstName, lastName].filter(Boolean).join(" ").trim()`. Omit Customer if the
+result is empty or the WL has no customer. There is **no fallback to customer
+code or UUID**. Do not collapse internal whitespace in persisted names.
+If authoritative metadata changes before submission, fetch it again and re-sign.
+
+Comment normalization is `comment.trim().replace(/\s\s+/g, " ")`, followed by
+trimming; omitted, empty, and whitespace-only comments produce no Comment field.
+For example, `"  Operational   reason  "` signs `"Operational reason"`.
+
+**Complete payload construction examples**
+
+The following produces the exact complete typed-data object for each operation,
+including ordered `types` and `message`. Example addresses and labels are
+illustrative: use discovered metadata from the target workspace.
+
+```javascript
+function initiate(fields, timestampMs) {
+  const entries = fields.filter(([, value]) => value != null);
+  entries.push(["TimestampMs", timestampMs]);
+  return {
+    domain: { name: "FortVault", version: "1", chainId: 1 },
+    primaryType: "Initiate",
+    types: {
+      Initiate: entries.map(([name]) => ({ name, type: "string" })),
+    },
+    message: Object.fromEntries(entries),
+  };
+}
+
+const timestampMs = Date.now().toString();
+const address = "0x1111111111111111111111111111111111111111";
+
+const creation = initiate([
+  ["Action", "Whitelist Address"],
+  ["Name", "Treasury"],
+  ["Address", address],
+  ["Asset", "USDC on Ethereum"],
+  ["Customer", null], // Omitted for global scope; customer scope uses UUID here.
+  ["Scope", "Global"],
+  ["Custody", "Self-Custodied"],
+  ["Ownership", "Owned"],
+], timestampMs);
+
+const archive = initiate([
+  ["Action", "Archive Whitelist Address"],
+  ["Name", "Treasury"],
+  ["Address", address],
+  ["Asset", "USDC on Ethereum"],
+  ["Customer", null], // Customer scope uses current nonblank name here, NOT UUID.
+  ["Comment", "Operational reason"],
+], timestampMs);
+
+const activate = initiate([
+  ["Action", "Unarchive Whitelist Address"],
+  ["Name", "Treasury"],
+  ["Address", address],
+  ["Asset", "USDC on Ethereum"],
+  ["Customer", null],
+  ["Comment", null], // Omitted when no nonblank comment was supplied.
+], timestampMs);
+
+// For the chosen operation, sign that typed-data object with the user's wallet.
+// Send signedPayload: JSON.stringify(creation), archive, or activate respectively.
+// Include signature, the matching request body fields, and Idempotency-Key.
+```
+
+Creation returns `{action: {id, status, typeId}, whitelistAddress: {name,
+address, assetId, customerId, accessType, custodyType, ownershipType}}`. Its
+`whitelistAddress` is requested metadata, not a record with an assigned ID.
+After execution, retrieve the persisted record through the WL list.
+Status changes return the shared `StatusChangeActionResponseDto`:
+`action` contains `id`, `status`, `partnerId`, `typeId`; `statusChange` contains
+`operation`, `whitelistAddressId`, `customerName` (string or null), `address`,
+and `assetSymbol`. Unrelated `scope`, `vaultId`, `vaultAddressAssetId`, and
+`vaultName` are omitted. Use the returned action ID for approval/rejection and
+monitoring, not the WL record ID.
 
 ## 6. Pagination and Filtering
 
@@ -774,8 +959,28 @@ or `tron`.
 Each item contains exactly `id`, `code`, `name`, and `category`. `code` and `name`
 are partner-defined; `category` describes behavior and uses the enum `vault`,
 `customer`, or `gas`. This endpoint returns only `vault` and `gas` categories.
-Use the vault type `id` in `POST /vaults`. Customer vault types are selected
-internally by `POST /customers` and are not returned by this endpoint.
+In `POST /vaults`, set `vaultType` to the discovered **`code`**, not `id`,
+`name`, or `category`. The backend resolves that code within the authenticated
+workspace. Do not hardcode `hot`: it is only an example of a partner-defined
+code. For the discovery response above, submit:
+
+```http
+POST /partner-api/v1/vaults
+Authorization: Bearer <NEW_JWT>
+Idempotency-Key: vault-create-example-001
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "Treasury",
+  "vaultType": "hot"
+}
+```
+
+Creation requires `vaults:create`; discovery requires `vaults:read`.
+Customer vault types are selected internally by `POST /customers` and are not
+returned by this endpoint.
 
 `GET /currencies` requires `assets:read` and returns active currencies
 enabled for the workspace, ordered by `code`:
@@ -957,17 +1162,130 @@ The backend resolves canonical labels and action details from authoritative
 records. Clients must not reconstruct review typed data from the sanitized
 `GET /actions/{id}` response.
 
-For action creation, use the maintained FortVault integration helper or
-reference client. Do not independently guess canonical labels from IDs. If no
-helper is available for the target language, confirm the exact typed-data
-contract with FortVault before implementing action creation.
+For signed action creation, use the initiation preparation endpoints below.
+The backend resolves canonical labels; do not guess labels from IDs. Existing
+manual construction according to the documented signing contracts remains supported.
+
+### 8.3.0 Server-prepared initiation typed data
+
+All signed Partner API initiation operations now have read-only preparation.
+Paths below are relative to /partner-api/v1. For status paths, operation is
+exactly archive or activate; no other value is supported.
+
+| Preparation endpoint (POST) | Body | Required scopes |
+| --- | --- | --- |
+| /generate-address-actions/typed-data | vaultId, assets:[{assetId}] (1-20 distinct assets) | addresses:actions:initiate, assets:read, and the owner's vaults:read or customers:read |
+| /whitelist-address-actions/typed-data | name, address, assetId, custodyType, ownershipType; optional customerId, accessType | whitelist-addresses:actions:initiate, whitelist-addresses:read, assets:read; customers:read when customerId is provided |
+| /vaults/{id}/{operation}/typed-data | optional comment | vaults:actions:initiate, vaults:read; also customers:read if it is a customer vault |
+| /customers/{id}/{operation}/typed-data | optional comment | customers:actions:initiate, customers:read |
+| /vault-address-assets/{id}/{operation}/typed-data | optional comment | addresses:actions:initiate, addresses:read, and the owner's vaults:read or customers:read |
+| /whitelist-addresses/{id}/{operation}/typed-data | optional comment | whitelist-addresses:actions:initiate, whitelist-addresses:read; customers:read for a customer-scoped record |
+| /transfer-actions/typed-data | source, destination, assetId, amount | See section 10.0 |
+
+Send a fresh API JWT and Content-Type: application/json. No Idempotency-Key or
+wallet signature is required for preparation. Use {} for an uncommented status
+request. Do not send signature, signedPayload, partnerId, or client-supplied
+display labels. Unknown fields are rejected with 400 VALIDATION_ERROR rather
+than silently discarded, including nested asset/selector fields. This strict
+body validation also applies to /actions/{id}/typed-data review preparation;
+existing mutation endpoints retain their validation behavior.
+
+Use vaultId wherever preparation selects an asset owner (generation and both
+transfer sides), even for customer vaults. Transfer destinations select exactly
+one vaultId or whitelistId; they cannot combine these or supply customerId.
+Keep customerId only for assigning WL customer access and the customer ID in
+/customers/{id}/{operation}/typed-data. Resolved customerId response metadata
+is unchanged. Customer resources require the customers feature. Resource IDs
+and joins are tenant-scoped; foreign/deleted resources return 404
+RESOURCE_NOT_FOUND. Missing scopes return 403 INSUFFICIENT_SCOPE; disabled
+features return 403 FEATURE_DISABLED. DTO/invalid-operation errors return
+400 VALIDATION_ERROR. Invalid current status and ambiguous customer-vault resolution
+return 409 CONFLICT, matching submission. Disabled generation assets return
+400 VALIDATION_ERROR; missing assets return 404 RESOURCE_NOT_FOUND.
+JWT/rate-limit/error envelopes are unchanged. Scope guard and DTO checks precede
+service resolution; preparation has no idempotency replay response.
+
+Every endpoint in this table except transfer returns HTTP 200 with exactly
+timestampMs (string), typedData (object), signedPayload (string), request
+(object), all non-null. The transfer response is documented separately in 10.0.
+timestampMs is server-generated Unix milliseconds. typedData uses the existing
+Initiate signing builder and domain FortVault/1/1; signedPayload is its exact
+JSON.stringify serialization. Field order, optional omission and action labels
+remain those specified in the operation's signing section. Do not reconstruct
+the returned object or sign it as an ordinary text message.
+
+The returned request contains only normalized submission fields:
+- Generate address: vaultId and assets:[{assetId}], preserving request asset order.
+- Whitelist creation: name, address, assetId, accessType, custodyType,
+  ownershipType, and customerId only when present. Default accessType is all
+  without a customer and customer with a customer. Customer-scoped entries
+  require external ownership. Address validation uses the selected chain type;
+  EVM and Bitcoin Bech32 addresses are canonicalized with the existing WL helper.
+- All status changes: comment when nonblank; otherwise {}. Comment normalization
+  is the same DTO whitespace normalization and trim used during submission.
+
+Example preparation:
+
+```http
+POST /partner-api/v1/vaults/11111111-1111-4111-8111-111111111111/archive/typed-data
+Authorization: Bearer <FRESH_JWT>
+Content-Type: application/json
+
+{"comment":"Maintenance"}
+```
+
+After receiving prepared, sign prepared.typedData using EIP-712. Submit this body
+with a fresh JWT and an Idempotency-Key:
+
+```javascript
+const body = {
+  ...prepared.request,
+  signedPayload: prepared.signedPayload,
+  signature: walletSignature
+};
+```
+
+Use POST /generate-address-actions or POST /whitelist-address-actions for
+creation. For status changes use PUT to the same resource/id/operation path
+without /typed-data. Do not submit timestampMs, typedData or a nested request
+field. Keep the returned signedPayload string unchanged. Manual payload
+construction remains supported; existing initiation/review endpoints are unchanged.
+
+Generation preparation requires an active owner, distinct assets, and active
+partner-asset configuration. Status preparation requires active for archive or
+archived for activate. It can therefore prepare activation for archived records;
+address-asset status preparation does not impose a new parent-active condition.
+WL creation rejects archived customers and contradictory scope/ownership fields.
+Customer signing labels use first/last name without falling back to customer code,
+matching submission. WL creation signs customer UUID; WL status signs customer
+name. Address-asset status signs the stored shared-address display value, while
+WL status signs the stored whitelist address. Neither status payload lowercases
+these stored display addresses. Always use the returned payload, not a label or
+address reconstructed from the list DTO.
+
+Preparation does NOT create an action, reserve an address or funds, sign, or
+dispatch processing. It does not check signer permissions, initiation policy,
+approval requirements, or execution availability. Preparation and submission now
+share read-only action-intent resolvers. Generation also checks pending-generation
+claims and resolves current address slots; WL activation checks conflicting claims.
+These checks are repeated at submission and do not reserve resources. Preparation success is not a dry run or a promise
+of acceptance. Names, status and configuration can change: submission reconstructs
+and verifies the signed payload and rechecks authorization/current state. Prepare
+again after such changes. The existing TimestampMs freshness limitation remains;
+preparation does not introduce signature expiry, nonce reservation or single-use
+signatures. Auto-approved submission may execute immediately.
+
+Unsigned customer/vault creation does not need typed-data preparation. Exchange
+account initiation and API-client management remain unsupported through Partner
+API; this change does not add them.
 
 ### 8.3.1 Exact status-change initiation payloads
 
 These rules cover the six customer, regular-vault, and vault-address-asset
-archive/activate endpoints in section 5.3. There is no initiation typed-data
-preparation endpoint for these requests. The existing action typed-data endpoint
-prepares review/cancellation only, after an action exists.
+archive/activate endpoints in section 5.3. Prepare their initiation payloads with
+POST to the same resource/id/operation path followed by /typed-data (section 8.3.0).
+The existing /actions/{id}/typed-data endpoint remains for review/cancellation
+after an action exists.
 
 Use primary type **`Initiate`**, the domain in section 8.2, and EIP-712 type
 **`string` for every message field**, including `TimestampMs`. Use the current
@@ -1178,7 +1496,7 @@ The action-signing user needs the corresponding workspace permission:
 | ---------------- | ---------------------------------------- | ----------------------------------------- |
 | Generate address | `vaults:actions:generate_address:initiate` | `vaults:actions:generate_address:review` |
 | Transfer         | `vaults:actions:transfer:initiate`         | `vaults:actions:transfer:review`         |
-| Whitelist creation/status review | Initiation is not exposed through Partner API | `vaults:actions:whitelist:review` |
+| Whitelist creation/status | `vaults:actions:whitelist:initiate` | `vaults:actions:whitelist:review` |
 | Vault archive/activation | `vaults:actions:initiate` | `vaults:actions:review` |
 | Customer archive/activation | `customers:actions:initiate` | `customers:actions:review` |
 | Regular-vault asset archive/activation | `vaults:actions:initiate` | `vaults:actions:review` |
@@ -1493,56 +1811,474 @@ resource list as authoritative for addresses currently attached to the vault.
 
 ## 10. Create a Transfer
 
-### 10.1 Initiate
+### 10.0 Prepare initiation from resource IDs
 
-```http
-POST /partner-api/v1/transfer-actions
-Authorization: Bearer <NEW_JWT>
-Content-Type: application/json
-```
+POST /partner-api/v1/transfer-actions/typed-data returns HTTP 200. It is read-only:
+use a fresh API JWT, but no Idempotency-Key or wallet signature. It does not create
+an action, reserve funds, authorize a signer, check policy, estimate fees, check
+balance/dust, or dispatch execution. Submission revalidates current state.
+Preparation does check that the positive amount is exactly representable using
+the source asset's decimals, before destination resolution or returning typed data.
+
+Required body fields: source, destination, assetId (UUID), amount (decimal string
+with the same normalization/validation as initiation). No field accepts null.
+source requires vaultId (including for customer vaults); optional addressAssetId
+selects a specific active address-asset link belonging to that owner and asset.
+destination accepts the same owner selector OR whitelistId, never both.
+whitelistId cannot be combined with vaultId or addressAssetId. customerId is not
+a transfer selector. Unknown fields at any depth are rejected with 400 VALIDATION_ERROR.
+
+Example request:
 
 ```json
 {
-  "fromAddress": "0x1111111111111111111111111111111111111111",
-  "toAddress": "0x2222222222222222222222222222222222222222",
-  "assetId": "5b7a1100-f1d1-4f16-b91d-1b22421ed234",
-  "amount": "1.5",
-  "signedPayload": "<SERIALIZED_EIP_712_TYPED_DATA>",
-  "signature": "<EIP_712_SIGNATURE>"
+  "source": {
+    "vaultId": "11111111-1111-4111-8111-111111111111",
+    "addressAssetId": "22222222-2222-4222-8222-222222222222"
+  },
+  "destination": {
+    "whitelistId": "33333333-3333-4333-8333-333333333333"
+  },
+  "assetId": "44444444-4444-4444-8444-444444444444",
+  "amount": "1.5"
 }
 ```
 
-Rules include:
+For an internal destination, replace destination with {"vaultId":"<UUID>"},
+optionally adding addressAssetId. Use vaultId for both regular and customer
+vaults; the backend discovers the customer relationship and enforces the owner's
+read scope and feature. It never falls back to a whitelist if vault lookup fails.
+Obtain addressAssetId from the id field of GET /addresses?vaultId=<UUID>, not
+from an underlying shared-address identifier. Obtain whitelistId from
+GET /whitelist-addresses. Both source and internal destination use the exact
+assetId, which determines the network. No exchange-ID selector is supported.
 
-- Source and destination must be valid for the asset's chain.
-- Source address, asset, signer, and destination must belong to or be eligible
-  for the authenticated workspace.
-- The source must have sufficient available balance.
-- The decimal string must not exceed the asset's supported precision.
-- A whitelist destination must be active and eligible for the source vault.
-- Archived whitelist addresses cannot be used for new transfers.
-- Internal whitelist addresses are not eligible for customer vault transfers.
+If an owner has exactly one active link for that asset, addressAssetId may be
+omitted. With multiple matching links, preparation returns 409 CONFLICT; select
+explicitly. It never picks the latest/highest-balance address. Archived/deleted
+owners or links, foreign resources, wrong-asset links and ineligible whitelist
+records return 404 RESOURCE_NOT_FOUND. Selected whitelist records use existing
+source-customer access rules; another entry at the same address cannot substitute.
 
-FortVault can also recognize eligible partner vault or exchange deposit
-destinations. Destination rules are enforced by the backend; do not rely on
-client-side filtering as authorization.
+Scopes: transfers:actions:initiate and addresses:read are always required.
+Each resolved owner additionally requires vaults:read (regular/gas) or
+customers:read (customer). Whitelist destinations require whitelist-addresses:read.
+Customer resolution requires the customers feature. Missing scopes return 403
+INSUFFICIENT_SCOPE; disabled customer features return 403 FEATURE_DISABLED.
+Invalid selectors/amounts or identical normalized addresses return 400
+VALIDATION_ERROR. Scope guard and DTO checks precede resolution; source resolves
+before destination. No signer permission/policy conclusion follows from success.
 
-### 10.2 Approve, reject, and monitor
+The response has exactly timestampMs, typedData, signedPayload, transfer, source,
+destination. timestampMs is a server-generated milliseconds string. typedData is
+the Initiate object in section 10.1; signedPayload is its exact JSON.stringify
+serialization. transfer contains exactly fromAddress, toAddress, assetId, amount,
+all non-null strings. Both resolved entity objects contain exactly vaultId,
+customerId, addressAssetId, whitelistId (nullable UUIDs), and name (non-null string).
+Owner results have vaultId/addressAssetId and null whitelistId; customerId is
+null for regular/gas vaults. Whitelist results have whitelistId, its nullable
+customerId, and null vaultId/addressAssetId. name is the vault or whitelist name.
 
-Use the shared action approve, reject, or cancel endpoint with a fresh JWT and
-the corresponding EIP-712 payload. Poll `GET /actions/{id}` for the action
-lifecycle and use `GET /transactions` for observed transaction movements.
+Sign the returned typedData with EIP-712, then send the following to
+POST /transfer-actions with a fresh JWT and an Idempotency-Key:
 
-The action status values currently exposed by Partner API v1 are:
+```javascript
+const body = {
+  ...prepared.transfer,
+  signedPayload: prepared.signedPayload,
+  signature: walletSignature
+};
+```
 
-- `pending`
-- `approved`
-- `canceled`
-- `expired`
+Do not send source/destination selectors or other preparation response fields to
+initiation. The existing signature binds addresses/asset label/amount, NOT the
+selector IDs; submission checks address eligibility afresh and may qualify via
+another eligible destination path. Preparation is not an immutable entity-ID
+authorization or an execution guarantee. Existing manual initiation remains valid.
 
-`approved` means the action passed its required approval state. It does not by
-itself prove that a blockchain transaction is finalized. Use transaction data
-and the applicable operational confirmation rules for settlement decisions.
+### 10.1 Request and exact initiation signature
+
+POST /partner-api/v1/transfer-actions returns HTTP 201 on success. Required
+headers: Authorization: Bearer <fresh Ed25519 JWT>, Content-Type: application/json,
+and Idempotency-Key. Required body fields (none nullable or optional):
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| fromAddress | string | A source address linked to the asset in this workspace |
+| toAddress | string | An eligible destination address |
+| assetId | UUID string | Exact source asset/network catalog record |
+| amount | string | Positive, nonzero human-unit decimal amount, NOT base units |
+| signedPayload | string | JSON serialization of the complete typed-data object |
+| signature | string | Authorized signing user's EIP-712 wallet signature |
+
+No comment, vaultId, customerId, chainId, fee selection, nonce, or approval count
+is accepted as a transfer-creation field. Send strings; do not rely on the
+implementation's string coercion of numeric JSON values.
+
+Required API scope: transfers:actions:initiate plus vaults:read for a regular/gas
+source vault or customers:read for a customer source vault. Initiation does not
+require transfers:read, destination read scope, or whitelist-addresses:read.
+Discovery and later monitoring require their own read scopes. The recovered
+signing user must be active, in the API client's workspace, have
+vaults:actions:transfer:initiate, and satisfy the workspace initiation policy.
+
+EIP-712 domain, in property order: name="FortVault", version="1", chainId=1
+(JSON number). This signing-domain chain ID stays 1 for every execution network,
+including Tron and Bitcoin. primaryType is "Initiate". All fields have EIP-712
+type "string". Ordered types.Initiate AND ordered message fields are:
+
+| Order | Field | Exact value |
+| --- | --- | --- |
+| 1 | Action | Transfer |
+| 2 | From | Normalized fromAddress |
+| 3 | To | Normalized toAddress |
+| 4 | Asset | asset.symbol + " on " + asset.chain.name |
+| 5 | Amount | The normalized request decimal string, preserving its zeros |
+| 6 | TimestampMs | Decimal Unix milliseconds string, at least 13 digits |
+
+All six fields are required for initiation. None is optional. Do not add assetId,
+chainRef, RequestId, fee, or any other signed field. Top-level object order is
+domain, primaryType, types, message; domain order is name, version, chainId;
+types contains only Initiate (no EIP712Domain); each field descriptor is ordered
+name, type. Backend comparison uses JSON.stringify on parsed objects, so key
+order matters. Whitespace around JSON tokens is not the binding; the parsed
+property order and values are. Serialize the shown object as signedPayload.
+
+Complete signedPayload object example, with no key or signature. Replace the
+illustrative addresses, discovered labels, amount, and timestamp before signing:
+
+```json
+{
+  "domain": {
+    "name": "FortVault",
+    "version": "1",
+    "chainId": 1
+  },
+  "primaryType": "Initiate",
+  "types": {
+    "Initiate": [
+      {
+        "name": "Action",
+        "type": "string"
+      },
+      {
+        "name": "From",
+        "type": "string"
+      },
+      {
+        "name": "To",
+        "type": "string"
+      },
+      {
+        "name": "Asset",
+        "type": "string"
+      },
+      {
+        "name": "Amount",
+        "type": "string"
+      },
+      {
+        "name": "TimestampMs",
+        "type": "string"
+      }
+    ]
+  },
+  "message": {
+    "Action": "Transfer",
+    "From": "0x1111111111111111111111111111111111111111",
+    "To": "0x2222222222222222222222222222222222222222",
+    "Asset": "USDC on Ethereum",
+    "Amount": "01.5000",
+    "TimestampMs": "1790000000000"
+  }
+}
+```
+
+**Validity limitation:** the backend verifier checks TimestampMs against
+/^\d{13,}$/ but does not compare it with the current clock. There is no enforced
+initiation-signature age window or one-use timestamp. Use the current time, but
+do not expect an old/future timestamp alone to be rejected. JWT expiry and jti
+replay protection are separate: configurable defaults are a maximum 300-second
+JWT lifetime and 30-second clock skew. Action expiry is also separate, based on
+creation time and the action type's configured expirationSeconds after creation.
+A fresh JWT and a different idempotency key can resubmit the same initiation
+intent; do not assume signature-level duplicate suppression.
+
+### 10.2 Normalization and discovery
+
+HTTP string fields are trimmed; runs of two or more whitespace characters are
+collapsed to one space, except signedPayload which is only outer-trimmed.
+For addresses, EVM checksum conversion in HTTP validation is followed by
+chain-aware canonicalization for signing and storage:
+
+| Network | Required form and exact signed equivalent |
+| --- | --- |
+| EVM (evm:*) | Valid 0x hex address, signed lowercase, never checksum/display case. 0x52908400098527886E0F7030069857D2E4169EE7 becomes 0x52908400098527886e0f7030069857d2e4169ee7. |
+| Tron | Valid Base58Check T-address; trim and preserve case. TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj stays unchanged. Tron 41... hexadecimal is not a supported alternative and is not converted to Base58. |
+| Bitcoin Base58 | Valid Base58Check address; trim and preserve case (1/3/m/n/2 prefixes as accepted by validation). Never lowercase it. |
+| Bitcoin Bech32/Bech32m | For bitcoin:* and bc1/tb1 prefix, lowercase for signing; all-uppercase valid addresses normalize to lowercase; mixed-case/checksum-invalid addresses are rejected. |
+
+Source-scope, source-vault, policy-source and execution-source lookups preserve
+Bitcoin Base58 case and normalize EVM and Bitcoin bc1/tb1 comparisons. This does
+not add Bitcoin testnet execution support. Transaction ownership/history matching
+is a separate concern and has not been comprehensively migrated by this change.
+
+Amount regex after string normalization is /^(?!0+(\.0+)?$)\d+(\.\d+)?$/.
+" 01.5000 " signs "01.5000", not "1.5" and not "1500000". For a 6-decimal
+asset it converts to 1500000 base units. Leading zeros and trailing fractional
+zeros are preserved in Amount. Zero, negative values, +1, .5, 1., 1e-6, and
+decimal commas are rejected. EVM/Tron/Bitcoin all sign human-unit decimal strings.
+
+**Exact precision validation:** preparation and submission use the same check
+before conversion. Digits beyond asset.decimals must all be zero. For decimals=6,
+"1.0000001", "1.0000005", and "0.0000001" return HTTP 400 VALIDATION_ERROR
+with message "Amount exceeds the asset's supported precision of 6 decimal places".
+"01.5000000" is accepted and converts exactly to 1500000 base units, while its
+signed Amount remains "01.5000000". Conversion does not round accepted amounts.
+Zero is rejected and the converted integer must also be strictly positive.
+This does not change dust/minimum-transfer or balance/fee checks. The stored
+transfer amount still has PostgreSQL numeric(36,18) limits; arbitrary-length
+values are not guaranteed to persist without rounding/overflow. This change
+validates blockchain precision; it does not change database column capacity.
+
+Discover assetId, symbol, decimals, and its network through GET /assets and
+GET /chains (assets:read), and source/destination asset-address links through
+GET /addresses?vaultId=<id> (addresses:read plus that vault's read scope).
+Use the exact current symbol and chain display name, e.g. "USDC on Ethereum";
+do not substitute asset name, chainRef, or a hardcoded network label. The signed
+Asset label does not separately bind assetId, token address, or numeric execution
+chain ID. Do not infer stronger unique-asset binding than the current payload.
+
+### 10.3 Eligibility, balances, and fees
+
+The source must resolve inside the authenticated workspace, have a non-archived
+vault and an active link for the exact assetId. Customer flows require the
+customers feature. Customer archival is represented by its customer vault status.
+The selected assetId determines the execution chain; no cross-chain bridge or
+asset conversion is performed. Source and destination normalized addresses must
+differ. There is no separate prohibition on different addresses of one vault.
+
+Internal transfers can use regular/gas or customer vaults as source and
+destination, including customer-to-customer; there is no same-customer restriction
+for the internal-vault destination path. Both sides must have active links for
+the same assetId on its chain, and the destination vault must not be archived.
+No whitelist entry is required for an eligible internal destination. Workspace
+policy can still deny the transfer. Archived resources cannot qualify through
+the internal path; destination eligibility is an OR of internal, whitelist, and
+exchange paths, not an unconditional ban on the address if another path qualifies.
+
+External destinations require an active matching whitelist entry for the same
+assetId, or a recognized active exchange deposit address for the same currency
+and chain (exchanges feature required). Customer source vaults may use global
+all-scope WL entries or their own customer-scoped entries; regular sources use
+non-customer entries (all/internal). Customer sources cannot use internal-only
+or another customer's WL entries. An unknown external wallet is not allowed.
+
+GET /balances?vaultId=<id> is NOT sufficient to assess a specific source address.
+It sums stored balances across non-deleted links for each asset in the vault,
+including archived links. /addresses identifies links/status but has no balance
+field. Partner API has no address-level balance endpoint, transfer-options
+endpoint, or fee-estimation endpoint. Dashboard-only endpoints are not substitutes.
+There is no API spendable-balance/reservation guarantee against pending transfers
+or a stale chain snapshot.
+
+Initiation checks the specific source link's stored balance against the converted
+amount. It checks the configured asset dust threshold; Bitcoin additionally uses
+at least 546 satoshis as dust and reserves a fixed minimum 218 satoshis for fees.
+This is not a dynamic Bitcoin fee quote. Other chains do not have a complete
+native-fee sufficiency check in this initiation flow. Token transfers need native
+fee funding/resources on the execution chain; native transfers may need balance
+beyond their principal. Provider/execution requirements can still cause failure
+after acceptance. The API exposes neither a guaranteed fee budget nor Tron
+energy/bandwidth availability. Do not submit transfers simply to estimate fees.
+
+If policy requires zero approvals, initiation immediately calls the execution
+path, creates the transfer and dispatches processing. An API test can therefore
+broadcast a real transfer without a separate approve command. Use only explicitly
+authorized test funds/networks; no dry-run parameter exists.
+
+### 10.4 Response, errors, and validation order
+
+Success body has exactly action and transfer. Example (timestamps and IDs are
+illustrative; status depends on policy/execution):
+
+```json
+{
+  "action": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "status": "pending",
+    "partnerId": "22222222-2222-4222-8222-222222222222",
+    "typeId": "33333333-3333-4333-8333-333333333333"
+  },
+  "transfer": {
+    "createdAt": "2026-09-22T00:00:00.000Z",
+    "createdBy": "44444444-4444-4444-8444-444444444444",
+    "status": "created",
+    "fromAddress": "0x1111111111111111111111111111111111111111",
+    "toAddress": "0x2222222222222222222222222222222222222222",
+    "assetId": "55555555-5555-4555-8555-555555555555",
+    "amount": "01.5000"
+  }
+}
+```
+
+All displayed response fields are present. action.partnerId is nullable in the
+shared schema (normal authenticated creation populates it); the others are
+non-null. Action statuses: pending, approved, canceled, expired. Transfer statuses:
+created, processing, completed, failed. transfer is action metadata, NOT a
+persisted transfer DTO with an id. Initial status is created, even when action
+status has become approved. No txHash, fee, confirmation count, or settlement
+promise is returned by initiation.
+
+Errors use the standard envelope with statusCode, errorCode, message, details,
+requestId, timestamp, path (no stack). details may be null, string, array, or
+object. Do not assert only one validation message when multiple DTO fields fail.
+
+| HTTP | Public errorCode | Examples |
+| --- | --- | --- |
+| 400 | VALIDATION_ERROR | Malformed DTO, zero/exponent amount, bad typed-data/signature, mismatching payload, equal addresses, below dust |
+| 400 | INSUFFICIENT_BALANCE | Principal exceeds stored source balance; Bitcoin principal plus fixed fee reserve exceeds it |
+| 400 | IDEMPOTENCY_KEY_REQUIRED / IDEMPOTENCY_KEY_INVALID | Missing key or not 8-255 characters from A-Z, a-z, 0-9, period, underscore, colon, hyphen |
+| 401 | AUTHENTICATION_FAILED | Invalid/revoked client, JWT signature/claims/expiry, reused jti |
+| 403 | INSUFFICIENT_SCOPE | Missing endpoint scope or source-vault read scope |
+| 403 | ACTION_SIGNER_NOT_AUTHORIZED | Recovered user missing/inactive/foreign or missing initiation permission |
+| 403 | FORBIDDEN / FEATURE_DISABLED | Archived source vault, policy denial, unavailable customer/exchange feature |
+| 404 | RESOURCE_NOT_FOUND | Missing source/asset metadata or no eligible destination |
+| 409 | IDEMPOTENCY_KEY_REUSED | Same key with different request |
+| 409 | IDEMPOTENCY_REQUEST_IN_PROGRESS | Same key still reserved/in progress |
+| 409 | CONFLICT | Database/business conflict not mapped to a more specific code |
+| 429 | RATE_LIMIT_EXCEEDED | Per-client rate limit; Retry-After gives seconds |
+| 500 / 503 | INTERNAL_SERVER_ERROR / SERVICE_UNAVAILABLE | Unexpected internal failure or dependency unavailability; outcome may be uncertain |
+
+**Destination error caveat:** although DESTINATION_NOT_ALLOWED exists in the
+public enum, the current missing-destination exception wording does not match
+that mapping. The usual unknown/ineligible destination path returns HTTP 404
+RESOURCE_NOT_FOUND, not DESTINATION_NOT_ALLOWED. Restricted WL entries generally
+fail the destination lookup first. Do not change tests to expect a code solely
+because it appears in the enum.
+
+Validation precedence for otherwise reachable requests:
+
+1. JWT/client validation, consume jti, rate limit, endpoint initiation scope.
+2. Idempotency key validation/reservation (identical completed retry can return
+   its saved response without running downstream validation again).
+3. DTO transformation/validation.
+4. Resolve source asset-address context and require source-vault read scope.
+5. Recover signing user; require active same-tenant user and initiation permission.
+6. Load user/asset; normalize addresses and reject equality; resolve source,
+   customer feature, source vault status, active source asset link and metadata.
+7. Reconstruct/compare initiation payload and verify signature.
+8. Validate exact amount precision/positivity, convert to positive base units,
+   dust check, Bitcoin fee reserve check, principal balance check.
+9. Resolve destination eligibility/features/WL restrictions.
+10. Resolve action type and initiation policy; persist action; calculate approval
+    requirements; execute immediately if zero approvals.
+
+Thus an invalid signature can precede insufficient balance; insufficient balance
+can precede an invalid destination; a missing source/read scope can precede both.
+Policy/provider failures are not a single fixed validation response. An error
+after persistence does not prove no action exists.
+
+Idempotency is scoped by tenant and API client, retained for 24 hours. The key
+binds method, path, query, and raw request body, including signedPayload/signature.
+Identical retries return saved status/body with Idempotency-Replayed: true;
+changing TimestampMs/signature is a different request. Reuse the original body
+and key but always create a fresh JWT/jti. Responses below 500 are recorded;
+unexpected 5xx can leave an in-progress reservation. Do not switch keys to retry
+an uncertain transfer without reconciling actions first. Expired keys can be
+reused after retention, so idempotency is not permanent semantic deduplication.
+
+### 10.5 Review, execution, and ledger verification
+
+Use POST /actions/{actionId}/typed-data with {operation:"approve"},
+{operation:"reject",comment:"Reason"}, or {operation:"cancel"}. Requires
+transfers:read plus transfers:actions:review for approve/reject, or
+transfers:actions:initiate for cancel. Preparation requires no Idempotency-Key.
+Rejection comment is required, maximum 500 characters; omit comment for the
+other operations. Returned fields are operation, timestampMs, typedData,
+signedPayload. Sign returned typedData and submit returned signedPayload
+unchanged; do not reorder/normalize/reconstruct the serialized string. Prepare
+again if authoritative action details change.
+
+For transfer reviews, primaryType is Approve, Reject, or Cancel respectively.
+The domain remains FortVault/1/1. Ordered string fields: Action="Transfer",
+From, To, Asset, Amount, RequestId (the action UUID), optional Reason (Reject
+only), TimestampMs. From/To are chain-normalized action addresses; Asset uses
+stored symbol/network labels; Amount is stored human-unit action amount.
+Missing metadata fields are omitted from both types and message; RequestId
+binds the review to this action. Do not invent missing fields. The initiation
+payload has no RequestId; approval/rejection/cancellation do.
+
+POST /actions/{id}/approve, /reject, /cancel require Idempotency-Key and return
+201 on success. Approval returns id, status, approvalCount, requiredApprovals;
+reject/cancel return id, status="canceled". Signer review permission is
+vaults:actions:transfer:review plus policy for approve/reject. An initiator cannot
+approve/reject their own action; only the initiator may cancel. Terminal/expired
+actions and duplicate reviews are rejected. Relevant codes include ACTION_NOT_FOUND
+(404), ACTION_ALREADY_PROCESSED/ACTION_ALREADY_APPROVED (409), ACTION_EXPIRED
+(400), FORBIDDEN (403), and signing/scope/idempotency errors above. Full review
+request examples are in section 9.2.
+
+Poll GET /actions/{id} with transfers:read. action.status=approved means the
+approval stage completed and execution was initiated, not blockchain settlement.
+details.transferStatus is created/processing/completed/failed or null when absent;
+details.txHash is a string or null. details also contains fromAddress, fromName,
+fromVaultId, toAddress, toName, toVaultId, assetId, symbol, chainRef, chainName,
+amount, each nullable if absent. A processing success callback sets completed;
+failure sets failed and may provide a hash. Public details do not expose the
+internal failure reason. A failed transfer can leave the action approved.
+
+GET /transactions?vaultId=<id> requires transactions:read plus the vault's read
+scope. It returns data, skip, take, not total. Available filters are vaultId,
+skip, take (1-50), order; there is no actionId/txHash/address filter or transaction
+detail endpoint. Page through results and correlate by details.txHash AND
+chainRef, then assetId and source/destination address and exact amount. Do not
+equate action.entityId (transfer ID after approval) to transactionId or movementId.
+Before txHash exists there is no authoritative direct action-to-ledger API link.
+
+Each movement contains exactly transactionId, movementId, sourceVaultId,
+destinationVaultId, sourceCustomerId, destinationCustomerId, txHash, chainRef,
+blockNumber, blockTimestamp, detectedAt, assetId, symbol, decimals,
+baseUnitAmount, fromAddress, toAddress, feeBaseUnitAmount. Ownership IDs, txHash,
+blockNumber, blockTimestamp, detectedAt and feeBaseUnitAmount are nullable.
+detectedAt is a date-time when present; blockNumber is a string. Principal is an exact integer string in the
+movement asset's smallest unit, not the signed decimal text. Ownership fields
+identify the source/destination inside this tenant; external ownership is null.
+Internal movements can appear in both vault queries; deduplicate by movementId.
+Bitcoin change/multiple outputs can produce several lines; do not require one
+row per action or add all outputs as outgoing principal.
+
+feeBaseUnitAmount is the transaction-wide stored fee repeated on its movement
+rows, in native fee units (e.g. wei, satoshis, sun), not necessarily the movement
+asset's units. Null means unavailable, not zero. Do not sum repeated fees across
+movements or source/destination queries; deduplicate by transactionId/chainRef.
+The response has no fee-asset ID/decimals, fee breakdown, or payer attribution;
+movement decimals describe principal only. Use known chain-native metadata and
+do not assert that an incoming vault paid the fee.
+
+The ledger query requires a transaction line. Fee-only failed transactions can
+be absent even if an on-chain fee was spent. Listener ingestion can lag or miss
+events; an empty page is not proof of failure. blockNumber/blockTimestamp provide
+observed block information, NOT a confirmation count or finality guarantee.
+No confirmations, finalized flag, receipt success, reorg state, settlement
+timestamp, or chain-head height is exposed. API-only tests can verify observed
+movements, not authoritative chain finality or every failed transaction's fee.
+
+### 10.6 Remaining API-only test limitations
+
+- No per-address spendable balance, fee estimate, funding faucet, or dry run:
+  deterministic funding/fee preconditions need externally prepared fixtures.
+- No enforced initiation timestamp freshness or signature-level deduplication:
+  negative replay/expiry tests must distinguish JWT, idempotency, and action expiry.
+- Precision checks now reject nonrepresentable amounts; harmless extra trailing
+  zeros remain supported. Database amount capacity remains a separate limit.
+- Destination-specific error mapping is incomplete; use actual 404 behavior.
+- No finality/receipt endpoint, direct action-ledger link before hash, or guaranteed
+  fee-only failed transaction visibility. Do not claim settlement from approval.
+- Address case handling is not uniformly chain-specific across all lookup/read
+  paths; use canonical discovered addresses and flag collision/casing tests as
+  known limitations rather than weakening their assertions.
+
 
 ## 11. Error Contract
 
