@@ -182,15 +182,42 @@ Keys are isolated by workspace and API Client ID and retained for 24 hours:
 - Same key with any different request field: FortVault returns
   `IDEMPOTENCY_KEY_REUSED` with HTTP `409`.
 - Concurrent request while the first is running: FortVault returns
-  `IDEMPOTENCY_REQUEST_IN_PROGRESS` with HTTP `409`.
+  `IDEMPOTENCY_REQUEST_IN_PROGRESS` with HTTP `409`, before comparing request
+  contents. Completed retries are checked for a matching request hash.
 - A replayed response includes `Idempotency-Replayed: true`.
 - Successful responses and deterministic `4xx` responses are replayed.
-- An unexpected `5xx` leaves the request in an uncertain processing state to
-  prevent automatic duplicate execution. Read the affected resource or action
-  before deciding whether a new operation is necessary.
+- Business changes, outgoing durable outbox messages, and the saved response
+  now commit in one database transaction. Failure before commit rolls them all
+  back; retrying the identical request with the same key is safe. If the commit
+  succeeded but its HTTP response was lost, that retry returns the saved result.
+- A deterministic `4xx` rolls back business changes before recording the error.
+  Authentication/authorization failures before the mutation interceptor and
+  idempotency-key conflicts are not recorded as mutation responses.
+- A `5xx` or connection loss does not tell the client whether commit succeeded.
+  Retry with the same key/body and a fresh JWT, not a new operation key.
+- Legacy `processing` records from the earlier non-atomic implementation remain
+  uncertain. They return `IDEMPOTENCY_REQUEST_IN_PROGRESS` even after expiry.
+  An operator must reconcile the request against its business records/outbox;
+  do not delete the reservation or switch keys without confirming the outcome.
 
-After 24 hours, the same key may execute again and must not be used as a
-permanent business identifier.
+After a completed record's 24-hour retention expires, the same key may execute
+again and must not be used as a permanent business identifier. This expiry rule
+does not reclaim uncertain `processing` records.
+
+Deployment note: drain in-flight mutations and replace all old backend instances
+before accepting writes with the new implementation. Mixed old/new writers do
+not share the atomic transaction/locking contract. This change requires no new
+table or migration; it reuses the existing idempotency and outbox tables. It does
+not repair old uncertain requests. Competing approve/reject/cancel operations,
+automatic approval and expiration also serialize on a tenant-scoped PostgreSQL
+action row lock. The waiting review reloads current state and approvals; it cannot
+overwrite a committed terminal decision. A terminal-state conflict returns 409.
+A non-final approval leaves the action pending, so a subsequent authorized
+cancellation remains possible. The lock lasts through database commit, not Redis
+delivery or downstream execution. Outbox delivery remains at-least-once; consumers
+must still deduplicate messages. SSE updates and expiration-scheduler hints are
+emitted after commit, not stored in the outbox; refresh/startup reconciliation
+is still needed if those hints are lost.
 
 ### 4.4 Node.js JWT example
 
@@ -1781,6 +1808,15 @@ Cancellation requires the resource read scope and corresponding
 initiated the action may sign its cancellation. A successful cancellation
 returns the same `{ "id", "status": "canceled" }` shape as rejection.
 
+For transfer actions, successful rejection or cancellation also changes the
+transfer metadata status from `created` to `failed`. A subsequent
+`GET /actions/{actionId}` returns `status: "canceled"` and
+`details.transferStatus: "failed"`; for an unbroadcast transfer,
+`details.txHash` is `null`. These details are not extra fields in the
+reject/cancel response. This is termination before execution, not a blockchain
+execution failure. The transfer metadata describes the intent; an execution
+transfer record need not have been created yet.
+
 Whether approval is required depends on the workspace policy and action scope.
 
 All three endpoints return HTTP `201` on a new successful request or an
@@ -1911,9 +1947,21 @@ and Idempotency-Key. Required body fields (none nullable or optional):
 | signedPayload | string | JSON serialization of the complete typed-data object |
 | signature | string | Authorized signing user's EIP-712 wallet signature |
 
-No comment, vaultId, customerId, chainId, fee selection, nonce, or approval count
-is accepted as a transfer-creation field. Send strings; do not rely on the
-implementation's string coercion of numeric JSON values.
+Only the six fields above are used as transfer-creation fields. Current creation
+validation strips unknown outer-body fields; it does not reject them. For example,
+an otherwise valid signed request with "unexpected": true can return HTTP 201
+and execute under the normal approval policy. Fields such as comment, vaultId,
+customerId, chainId, fee selection, nonce, or approvalCount are ignored, not
+supported options. Never use an extra field as a dry-run or safety switch.
+Preparation (/transfer-actions/typed-data) differs: it rejects unknown fields
+at any depth with 400 VALIDATION_ERROR.
+
+Stripping applies only to the outer request DTO. The JSON inside signedPayload
+is not stripped; exact typed-data reconstruction/comparison and signature
+verification still apply. Idempotency hashes the raw request before stripping,
+so adding, removing, or changing an ignored field under the same unexpired key
+returns 409 IDEMPOTENCY_KEY_REUSED. Send only the documented six fields.
+Send strings; do not rely on string coercion of numeric JSON values.
 
 Required API scope: transfers:actions:initiate plus vaults:read for a regular/gas
 source vault or customers:read for a customer source vault. Initiation does not
@@ -2183,9 +2231,11 @@ Idempotency is scoped by tenant and API client, retained for 24 hours. The key
 binds method, path, query, and raw request body, including signedPayload/signature.
 Identical retries return saved status/body with Idempotency-Replayed: true;
 changing TimestampMs/signature is a different request. Reuse the original body
-and key but always create a fresh JWT/jti. Responses below 500 are recorded;
-unexpected 5xx can leave an in-progress reservation. Do not switch keys to retry
-an uncertain transfer without reconciling actions first. Expired keys can be
+and key but always create a fresh JWT/jti. Successful and deterministic client
+error responses are recorded atomically as described in section 4.3. A new
+pre-commit failure rolls back; a lost post-commit response is replayed. Legacy
+uncertain processing records stay blocked even after expiry. Do not switch keys
+to retry an uncertain transfer without reconciliation. Completed keys can be
 reused after retention, so idempotency is not permanent semantic deduplication.
 
 ### 10.5 Review, execution, and ledger verification
@@ -2227,6 +2277,15 @@ fromVaultId, toAddress, toName, toVaultId, assetId, symbol, chainRef, chainName,
 amount, each nullable if absent. A processing success callback sets completed;
 failure sets failed and may provide a hash. Public details do not expose the
 internal failure reason. A failed transfer can leave the action approved.
+
+Interpret action status and transfer status together. Rejection or cancellation
+before execution produces `action.status="canceled"` with
+`details.transferStatus="failed"` and `details.txHash=null`, rather than leaving
+the transfer metadata as `created`. Do not classify this as an on-chain failure
+or expect a corresponding blockchain transaction. Conversely, a processing
+failure may leave `action.status="approved"` with
+`details.transferStatus="failed"`; that status alone does not prove the
+transaction was broadcast or failed on-chain.
 
 GET /transactions?vaultId=<id> requires transactions:read plus the vault's read
 scope. It returns data, skip, take, not total. Available filters are vaultId,
