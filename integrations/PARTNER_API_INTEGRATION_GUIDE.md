@@ -185,7 +185,13 @@ Keys are isolated by workspace and API Client ID and retained for 24 hours:
   `IDEMPOTENCY_REQUEST_IN_PROGRESS` with HTTP `409`, before comparing request
   contents. Completed retries are checked for a matching request hash.
 - A replayed response includes `Idempotency-Replayed: true`.
+- Every attempt receives a fresh `X-Request-Id` response header, including
+  replays. This header is not part of the stored response body.
 - Successful responses and deterministic `4xx` responses are replayed.
+- New deterministic-error records preserve the complete public envelope, including
+  the original `requestId` and `timestamp`; retries are still authenticated and
+  audited separately. Legacy partial error records use current request metadata
+  because the original complete envelope was not stored.
 - Business changes, outgoing durable outbox messages, and the saved response
   now commit in one database transaction. Failure before commit rolls them all
   back; retrying the identical request with the same key is safe. If the commit
@@ -866,6 +872,68 @@ List endpoints accept:
 | `skip`    | `0`     | Integer, minimum `0`          |
 | `take`    | `50`    | Integer from `1` through `50` |
 | `order`   | `DESC`  | `ASC` or `DESC`               |
+
+### Sorting contract
+
+The nine paginated lists below default to **DESC**. `order` changes the
+direction of **every key in the listed tuple**, including secondary fields and
+the final unique tie-breaker; it does not select a field. ASC means oldest to
+newest for dates and ascending comparison for text/UUIDs; DESC reverses that
+comparison. There is no `orderBy` parameter.
+
+| Endpoint | Primary key | Secondary / unique tie-breaker (same direction) | Null handling | Keys exposed for client verification |
+| --- | --- | --- | --- | --- |
+| `/customers` | Customer `createdAt` | Customer `id` | Both non-null | Both |
+| `/vaults` | Vault `createdAt` | Vault `id` | Both non-null | Both; not sorted by USD amount like the dashboard |
+| `/assets` | `symbol` | `chain.name`, then asset `id` | All non-null; records missing required chain metadata are excluded | All; same ordering with or without `vaultId` |
+| `/chains` | `name` | Chain `id` | Both non-null | Both |
+| `/addresses` | Asset-address link `createdAt` | Link `id` | Both non-null | Both; not the underlying vault-address creation time or ID |
+| `/balances` | `symbol` | `assetId` (unique within the required vault) | Both non-null | Both; amount is not a sorting key |
+| `/transactions` | `COALESCE(transaction.blockTimestamp, transaction.createdAt)` | `movementId` (transaction-line UUID) | Null block time is replaced by non-null internal creation time, not grouped first/last | `blockTimestamp` and `movementId` exposed; fallback `createdAt` is not |
+| `/actions` | Action `createdAt` | Action `id` | Both non-null | Both |
+| `/whitelist-addresses` | Whitelist `createdAt` | Whitelist `id` | Both non-null | Both |
+
+Transaction timestamps have different meanings:
+- `blockTimestamp`: recorded blockchain block time; used when present.
+- `detectedAt`: recorded detection time, nullable; **never used for sorting**.
+- Internal transaction `createdAt`: backend row insertion time; used only when
+  `blockTimestamp` is null. This is not transaction-line creation time and is not
+  exposed in the response. A black-box client cannot fully reconstruct ordering
+  for rows with null block time. Do not substitute `detectedAt` or `blockNumber`.
+
+Catalog text (`/assets`, `/chains`, `/currencies`) uses the server JavaScript
+`localeCompare` collation. Database text keys (`/balances` symbol and
+`/vault-types` name) use PostgreSQL collation. Do not assume ASCII/bytewise text
+ordering for mixed case, punctuation or accented names. UUID ties use UUID
+ordering (equivalent to lexicographic order of canonical lowercase UUIDs).
+Dates are compared at stored database precision; timestamps serialized to
+milliseconds can appear equal when stored sub-millisecond values differ.
+
+Tenant/resource authorization and applicable filters are applied before sorting
+and pagination. Catalog arrays are filtered/sorted before slicing. Stable keys
+make offset pagination deterministic over a **fixed dataset**, not a snapshot
+across requests: concurrent inserts, deletes, updates, backfills or permission
+changes can cause duplicate or omitted rows between pages. Keep filters,
+principal/scopes and direction unchanged when walking a dataset.
+
+The following unpaginated catalogs do not support `order`:
+
+| Endpoint | Fixed order | Verification |
+| --- | --- | --- |
+| `/vault-types` | Internal `sortOrder ASC`, `name ASC`, `id ASC` | Non-null keys, but `sortOrder` is not exposed; complete black-box verification needs controlled fixtures |
+| `/currencies` | `code ASC`, `id ASC` | Both exposed and non-null; the existing code-order claim is correct |
+| `/action-types` | `generate_address`, `transfer`, `whitelist_address`, `vault_status_change`, `vault_asset_status_change`, `whitelist_address_status_change`, `exchange_account_status_change` | Exposed unique `actionType`; returns the scope-authorized subsequence in this order |
+
+Test-client validation should use a designated, unchanged development dataset:
+compare omitted `order` with explicit DESC; fetch ASC and DESC pages with the
+same filters; assert monotonic tuples, unique row identifiers and concatenated
+page equality with the known fixture order. Include exact primary-key ties,
+multiple movements in one transaction, zero balances, and null block timestamps.
+Use fixture-known internal creation times for null-block transactions and
+fixture-known `sortOrder` for vault types; otherwise report these primary-order
+assertions as unverifiable, not failed. Do not create transfers or mutate
+production data merely to test sorting. Existing authorization and tenant
+isolation assertions must remain enabled.
 
 Customer list and detail responses include the customer's `vaultId`. Regular
 vault IDs are available from `GET /vaults` and `GET /vaults/{id}`.
@@ -1852,7 +1920,7 @@ resource list as authoritative for addresses currently attached to the vault.
 POST /partner-api/v1/transfer-actions/typed-data returns HTTP 200. It is read-only:
 use a fresh API JWT, but no Idempotency-Key or wallet signature. It does not create
 an action, reserve funds, authorize a signer, check policy, estimate fees, check
-balance/dust, or dispatch execution. Submission revalidates current state.
+balance, or dispatch execution. Submission revalidates current state.
 Preparation does check that the positive amount is exactly representable using
 the source asset's decimals, before destination resolution or returning typed data.
 
@@ -2084,7 +2152,7 @@ with message "Amount exceeds the asset's supported precision of 6 decimal places
 "01.5000000" is accepted and converts exactly to 1500000 base units, while its
 signed Amount remains "01.5000000". Conversion does not round accepted amounts.
 Zero is rejected and the converted integer must also be strictly positive.
-This does not change dust/minimum-transfer or balance/fee checks. The stored
+This does not change amount precision/positivity or balance/fee checks. The stored
 transfer amount still has PostgreSQL numeric(36,18) limits; arbitrary-length
 values are not guaranteed to persist without rounding/overflow. This change
 validates blockchain precision; it does not change database column capacity.
@@ -2131,8 +2199,13 @@ There is no API spendable-balance/reservation guarantee against pending transfer
 or a stale chain snapshot.
 
 Initiation checks the specific source link's stored balance against the converted
-amount. It checks the configured asset dust threshold; Bitcoin additionally uses
-at least 546 satoshis as dust and reserves a fixed minimum 218 satoshis for fees.
+amount. The minimum is one asset base unit (`10^-decimals`): for example,
+`0.000001` for a 6-decimal asset, `0.00000001` for an 8-decimal asset, and
+`0.000000000000000001` for an 18-decimal asset. `dustThresholdAmount` is a
+display filter, not an API transfer minimum. Zero and fractional base units
+remain invalid. Bitcoin reserves a fixed minimum 218 satoshis for fees.
+Network/provider output dust rules may still reject small Bitcoin outputs
+during execution even when initiation succeeds.
 This is not a dynamic Bitcoin fee quote. Other chains do not have a complete
 native-fee sufficiency check in this initiation flow. Token transfers need native
 fee funding/resources on the execution chain; native transfers may need balance
@@ -2184,7 +2257,7 @@ object. Do not assert only one validation message when multiple DTO fields fail.
 
 | HTTP | Public errorCode | Examples |
 | --- | --- | --- |
-| 400 | VALIDATION_ERROR | Malformed DTO, zero/exponent amount, bad typed-data/signature, mismatching payload, equal addresses, below dust |
+| 400 | VALIDATION_ERROR | Malformed DTO, zero/exponent or over-precision amount, bad typed-data/signature, mismatching payload, equal addresses |
 | 400 | INSUFFICIENT_BALANCE | Principal exceeds stored source balance; Bitcoin principal plus fixed fee reserve exceeds it |
 | 400 | IDEMPOTENCY_KEY_REQUIRED / IDEMPOTENCY_KEY_INVALID | Missing key or not 8-255 characters from A-Z, a-z, 0-9, period, underscore, colon, hyphen |
 | 401 | AUTHENTICATION_FAILED | Invalid/revoked client, JWT signature/claims/expiry, reused jti |
@@ -2217,7 +2290,7 @@ Validation precedence for otherwise reachable requests:
    customer feature, source vault status, active source asset link and metadata.
 7. Reconstruct/compare initiation payload and verify signature.
 8. Validate exact amount precision/positivity, convert to positive base units,
-   dust check, Bitcoin fee reserve check, principal balance check.
+   Bitcoin fee reserve check, principal balance check.
 9. Resolve destination eligibility/features/WL restrictions.
 10. Resolve action type and initiation policy; persist action; calculate approval
     requirements; execute immediately if zero approvals.
@@ -2229,7 +2302,18 @@ after persistence does not prove no action exists.
 
 Idempotency is scoped by tenant and API client, retained for 24 hours. The key
 binds method, path, query, and raw request body, including signedPayload/signature.
-Identical retries return saved status/body with Idempotency-Replayed: true;
+Identical retries return saved status/body with Idempotency-Replayed: true.
+For deterministic 4xx errors stored with the complete-envelope implementation,
+all public fields are preserved: statusCode, errorCode, message, details,
+requestId, timestamp, and path. requestId and timestamp identify the original
+response; the fresh JWT is validated and the retry is audited separately.
+Legacy stored errors without a complete envelope cannot recover their original
+timestamp and continue to receive current request metadata until those records
+expire. Errors before idempotency reservation (including authentication failures)
+are not stored replays. Do not submit another transfer to test this behavior;
+use an invalid-signature fixture.
+
+For a request under the same key,
 changing TimestampMs/signature is a different request. Reuse the original body
 and key but always create a fresh JWT/jti. Successful and deterministic client
 error responses are recorded atomically as described in section 4.3. A new
@@ -2341,6 +2425,31 @@ movements, not authoritative chain finality or every failed transaction's fee.
 
 ## 11. Error Contract
 
+### Request correlation on all responses
+
+Every backend response under `/partner-api/v1` includes `X-Request-Id`, a
+server-generated UUID identifying the current HTTP attempt. This applies to
+successful reads/writes, validation and authentication failures, rate limits,
+and application errors. Caller-supplied request IDs are ignored. Responses
+generated outside the backend (for example, a gateway outage) may lack it.
+
+Store this header for both successful and failed requests and supply it to
+FortVault support. It is exposed through CORS, together with
+`Idempotency-Replayed` and `Retry-After`, so browser clients can read it.
+
+The existing error-body `requestId` remains for compatibility. For newly
+generated errors it matches the header. A replay of a stored complete error
+envelope preserves the original body `requestId` and `timestamp`; the header
+identifies the new attempt and its separate audit record.
+
+For example, an invalid-signature request with `Idempotency-Key: transfer-123`
+returns HTTP 400 and `X-Request-Id: 11111111-1111-4111-8111-111111111111`.
+An identical retry with the same key and a fresh JWT returns HTTP 400,
+`Idempotency-Replayed: true`, and
+`X-Request-Id: 22222222-2222-4222-8222-222222222222`. The saved error body
+still contains `requestId: 11111111-1111-4111-8111-111111111111`.
+The idempotency key identifies the operation; the header identifies each attempt.
+
 Partner API errors use a stable public `errorCode` and a human-readable
 `message`:
 
@@ -2356,8 +2465,8 @@ Partner API errors use a stable public `errorCode` and a human-readable
 }
 ```
 
-Store `requestId` with the partner's request log. Supply it to FortVault support
-when investigating a failure. FortVault may record a more specific internal
+Store `X-Request-Id` with the partner's request log; retain the body `requestId`
+as original-response context when present. FortVault may record a more specific internal
 diagnostic code, but internal codes are not part of the public API response.
 
 ### 11.1 Public error codes
@@ -2463,7 +2572,7 @@ returned action IDs.
 - [ ] Verify same-key replay, payload mismatch, and in-progress handling.
 - [ ] Use arbitrary-precision amount handling.
 - [ ] Implement pagination and rate-limit backoff.
-- [ ] Store action IDs and public error `requestId` values.
+- [ ] Store action IDs and `X-Request-Id` from every response, plus error-body `requestId` when present.
 - [ ] Handle policy-dependent zero, one, or multiple approvals.
 - [ ] Test signer-role failures and scope failures.
 - [ ] Test uncertain mutation results without blind retries.
