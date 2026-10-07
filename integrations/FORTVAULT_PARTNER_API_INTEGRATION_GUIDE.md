@@ -1,10 +1,12 @@
 # Partner API Integration Guide
 
-Status: Implemented interface guide
+Status: Implemented interface guide (sections 1-16), with a proposed exchange integration extension (section 17)
 
 API version: `v1`
 
 Last reviewed: 2026-09-18
+
+Exchange integration proposal added: 2026-09-29
 
 ## 1. Purpose
 
@@ -22,6 +24,12 @@ Use both resources during implementation:
 
 The dashboard Swagger document at `<FORTVAULT_API_URL>/api/docs` contains the
 dashboard's internal API and is not the Partner API contract.
+
+[Section 17](#17-planned-exchange-integration) outlines proposed calls for
+partner planning. They are not available endpoints or a committed release
+contract. Existing endpoint and scope tables describe the implemented interface
+only; the exchange extension requires implementation and an agreed OpenAPI
+specification before integration begins.
 
 ## 2. Integration Model
 
@@ -2619,3 +2627,119 @@ response change requires a new version or an explicitly coordinated migration.
 If this guide and the Partner API Swagger document disagree, stop the affected
 integration work and confirm the contract with FortVault. Do not infer behavior
 from the dashboard API or undocumented backend routes.
+
+## 17. Planned Exchange Integration
+
+**Status: proposed scope for partner discussion, not an implemented API.**
+Endpoint names, schemas, scopes, limits, and delivery dates require agreement.
+This section does not add functionality to the current release or supersede its
+Swagger specification. The final extension will be documented in Swagger and
+this guide when implemented and accepted.
+
+### 17.1 Product boundary
+
+FortX Connect owns customer trading, balances, exposure calculations, risk-based
+reconciliation, and decisions to mirror individual trades. FortVault receives
+authorized swap requests and returns execution results. Both per-order
+mirroring and net reconciliation use the same swap interface; neither requires
+a FortX-specific reconciliation endpoint in FortVault.
+
+One asset-pair reconciliation may produce one logical swap. A multi-asset cycle
+may require several swaps. Each swap executes on one eligible, sufficiently
+funded exchange account. The initial scope excludes cross-exchange splitting
+and automatic funding transfers between exchange accounts.
+
+### 17.2 Proposed new calls
+
+All paths below are relative to `/partner-api/v1` and are proposals only.
+
+| Method and proposed path | Purpose |
+| --- | --- |
+| `GET /exchange-accounts` | Discover authorized connected accounts, status, and trading eligibility without exposing credentials. |
+| `GET /exchange-accounts/{id}/balances` | Read available and reserved exchange balances, with observation time and freshness information. |
+| `GET /swap-markets` | Discover eligible currency pairs, account availability, amount modes, precision, and minimum trading amounts. |
+| `POST /swap-quotes` | Obtain a fee-aware quote and select one eligible account using executable pricing for the requested size. Does not submit an exchange order. |
+| `POST /swap-actions/typed-data` | Prepare canonical swap initiation typed data from the server-resolved quote and execution limits. Does not initiate or execute the swap. |
+| `POST /swap-actions` | Initiate a signed, idempotent swap action under the applicable business policy and approval requirements. |
+| `GET /swaps` | List authorized swap execution records, with proposed filters for account, status, date range, and partner reference. |
+| `GET /swaps/{id}` | Read execution status, actual input and output, fees, fills, and any remaining unfilled quantity. |
+
+Exchange-account connection and credential administration may remain in the
+backoffice for the initial delivery. An account being connected does not prove
+that it has trading permission, current liquidity, or sufficient available funds.
+Exchange records and fills must remain distinct from the blockchain movements
+returned by the current `GET /transactions` endpoint.
+
+### 17.3 Existing action calls to extend
+
+The following calls already exist for supported actions. **Their support for
+swap actions is proposed and is not available merely because the routes exist.**
+
+| Existing call | Proposed extension |
+| --- | --- |
+| `GET /actions` and `GET /actions/{id}` | Discover and inspect authorized swap actions and their related execution identifiers. |
+| `POST /actions/{id}/typed-data` | Prepare canonical approval, rejection, or pending-action cancellation payloads for swaps. |
+| `POST /actions/{id}/approve` | Approve a swap action according to its policy; approval is not proof of execution. |
+| `POST /actions/{id}/reject` | Reject a swap action that remains eligible for rejection. |
+| `POST /actions/{id}/cancel` | Cancel a pending swap action where permitted; this does not cancel an order already submitted to an exchange. |
+| `GET /action-types` and `GET /capabilities` | Discover enabled swap support and the authenticated client's effective permissions. |
+
+Provider-order cancellation, if required, needs a separate agreed execution
+contract. It must not be inferred from pending-action cancellation.
+
+### 17.4 Contract requirements
+
+- **Amounts:** distinguish exact-input conversions, such as spending 1,000 USDT,
+  from target-output requests, such as acquiring 3 BTC within a maximum spend.
+  Define net-of-fee quantities, minimum output or maximum input, rounding,
+  partial fills, and residual handling. A quantity target is not a guaranteed
+  fill. Currency identity and market precision must be explicit; a swap does
+  not itself select a blockchain network or move funds between networks.
+- **Quotes:** specify the selected account, amounts, fees, expiry, permitted
+  price deviation, and whether a quote reserves funds or guarantees any terms.
+  An indicative price is not an executable quote. Revalidation must not silently
+  change the account or broaden signed execution limits.
+- **Authorization:** retain workspace isolation, API-client authentication,
+  resource permissions, exact action-payload binding, and applicable signing
+  and approval controls. Automation must not bypass them. Credentials remain
+  server-side. Final resource-specific scope names will be agreed before release.
+- **Execution records:** distinguish action approval from order submission,
+  partial fills, completion, failure, and unresolved outcomes. Report exact
+  amounts, fee currencies, stable execution/fill identifiers, and timestamps.
+  Detailed schemas, status values, ordering, and pagination remain to be agreed.
+- **Correlation and retries:** a proposed workspace-scoped `externalReference`
+  links a swap to a partner trade or reconciliation cycle. Its uniqueness and
+  lookup rules must be defined separately from `Idempotency-Key` behavior.
+  Preserve request correlation and safe retry semantics. Reconcile uncertain
+  execution on the original account before replacement or rerouting.
+
+### 17.5 Proposed execution updates and recovery
+
+For reliable production synchronization, the recommended extension includes
+signed execution-update webhooks and a recoverable event feed:
+
+| Method and proposed path | Purpose |
+| --- | --- |
+| `GET /events?cursor=...` | Retrieve authorized durable execution updates after an opaque cursor, including updates to previously created swaps. |
+
+This feed and webhook delivery are also proposed, not current capabilities.
+Delivery must define event identifiers, signatures and replay protection,
+duplicate and out-of-order handling, retention, expired-cursor recovery, and
+subscription administration. Cursor semantics must account for committed events;
+a raw auto-increment identifier or offset-paginated list is not by itself a
+lossless synchronization contract.
+
+### 17.6 Intended integration flow
+
+1. Discover eligible accounts, balances, and markets.
+2. Request a quote for the required conversion and execution limits.
+3. Prepare typed data, sign the exact payload, and initiate the swap action.
+4. Complete any approvals required by policy before execution.
+5. Track the swap through its actual execution outcome, including partial or
+   unresolved results.
+6. Apply confirmed fills and fees to the partner's customer accounting or
+   reconciliation cycle without treating action approval as a completed trade.
+
+The [FortX Connect overview](../FORTX_CONNECT_PRODUCT_DESCRIPTION.md) describes
+the consuming exchange core. The [FortVault Custody overview](../FORTVAULT_CUSTODY_PRODUCT_DESCRIPTION.md)
+describes the custody and proposed single-account swap execution boundary.
