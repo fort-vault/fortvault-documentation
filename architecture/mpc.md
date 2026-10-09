@@ -1,10 +1,12 @@
 # FortVault MPC - High-Level Description
 
+> Detailed background document. For the current offer scope, provider-specific authentication distinctions, and offline-prototype status, use [FortVault Custody - Product and Technical Overview](../products/fortvault-custody.md). Historical examples below are not proof of deployment configuration or production qualification.
+
 ## Purpose
 
 FortVault MPC is the threshold-signing component of the FortVault custody platform. It is responsible for distributed key generation, deterministic child-key derivation, and transaction signing without reconstructing a full private key on any single machine.
 
-The MPC service is intentionally separated from the backend and frontend. Backend users can request custody actions, but they cannot directly access private keys or produce blockchain signatures. Final signing is performed only through the processing service and the MPC cluster.
+The MPC service is intentionally separated from the backend and frontend. Backend users can request custody actions, but they cannot directly access custody shares. Custody Processing coordinates blockchain signing through MPC; Exchange Processing coordinates a separate exchange-authentication signing path.
 
 ## System Role
 
@@ -15,7 +17,7 @@ FortVault uses a multi-service custody architecture:
 - `fortvault-mpc` performs distributed cryptographic operations.
 - Blockchain RPC endpoints are used by processing for transaction construction, broadcast, and confirmation handling.
 
-In the target architecture, `fortvault-processing` is the only service expected to call MPC for key, derivation, and signing operations.
+Custody key derivation and transaction signing are coordinated by `fortvault-processing`. `fortvault-exchange-processing` also calls dedicated MPC endpoints for exchange Ed25519 key generation and payload signing. Existing exchange key protection is not evidence of independently enforced swap-order policy; that binding is part of the proposed swap scope.
 
 ## MPC Cluster Model
 
@@ -210,8 +212,7 @@ MPC support can include:
   - USDC.
 - Tron:
   - native TRX,
-  - USDT,
-  - USDC.
+  - USDT.
 - Bitcoin mainnet:
   - native BTC.
 
@@ -267,7 +268,7 @@ The MPC security model assumes:
 - Node identity keys and key-parts encryption keys are protected.
 - Address-attestation private keys are protected separately from custody key shares.
 - Public attestation signer addresses in MPC node configuration match the signer set configured in the on-chain address verifier.
-- Processing is the only production component allowed to call MPC signing endpoints.
+- Custody Processing and Exchange Processing require separately scoped access to their respective MPC paths; neither caller's assertion of business approval is sufficient signing authority.
 - Network and database access to MPC nodes is restricted.
 
 ## Known Limitations and Audit Notes

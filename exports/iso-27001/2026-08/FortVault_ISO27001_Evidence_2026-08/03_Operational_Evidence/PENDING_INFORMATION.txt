@@ -1,0 +1,30 @@
+FortVault ISO 27001 evidence still required from operational owners
+
+1. Cloud configuration evidence
+   Sanitized AWS and GCP exports for network boundaries, IAM/service accounts,
+   databases, caches, secret stores, encryption, backup settings, and workload inventory.
+   Cloud audit logging and centralized monitoring are currently not configured.
+
+2. Backup and restore completion evidence
+   Encryption settings, least-privilege access review, approved RPO/RTO, immutable or
+   isolated copy controls, job evidence, and the latest successful restore-test record.
+   Do not include MPC shares or recovery material.
+
+3. Centralized production logging
+   Platform, sources, access control, retention, alerting, time synchronization,
+   redaction standard, and representative sanitized evidence.
+
+4. Production TLS and encryption at rest
+   Ingress TLS policy, certificate management, redirect behavior, storage/database/
+   cache/backup encryption, KMS configuration, key rotation, and exceptions.
+
+5. Endpoint operating systems and updates
+   In-scope endpoint classes, inventory, supported versions, patch policy, device
+   management, disk encryption, endpoint protection, and sanitized compliance output.
+
+6. Release-specific verification
+   CI/test output, release identifier, approval record, sanitized health-audit output,
+   known degraded checks, owners, and remediation dates.
+
+Never place credentials, tokens, private keys, MPC shares, customer data, or raw
+secret-manager values in this package.

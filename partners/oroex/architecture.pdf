@@ -1,0 +1,497 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+4 0 obj
+<< /Length 2722 >>
+stream
+BT /F2 20 Tf 54 736 Td (Oroex and FortVault - High-Level Platform) Tj ET
+BT /F2 20 Tf 54 713 Td (Architecture) Tj ET
+BT /F2 14 Tf 54 668 Td (Purpose) Tj ET
+BT /F1 10 Tf 54 643 Td (Oroex is planned as a light crypto exchange / swap product. Users can deposit crypto,) Tj ET
+BT /F1 10 Tf 54 630 Td (swap one asset to another, and withdraw funds. Oroex does not operate its own order) Tj ET
+BT /F1 10 Tf 54 617 Td (book. Instead, Oroex uses FortVault as a custody and processing provider, and FortVault) Tj ET
+BT /F1 10 Tf 54 604 Td (integrates with external exchanges for liquidity and mirror trade execution.) Tj ET
+BT /F1 10 Tf 54 586 Td (FortVault is the secure infrastructure layer behind Oroex. It provides workspace) Tj ET
+BT /F1 10 Tf 54 573 Td (management, vaults, customer address generation, blockchain processing, MPC signing,) Tj ET
+BT /F1 10 Tf 54 560 Td (exchange integration, custody operations, and operational audit trails.) Tj ET
+BT /F2 14 Tf 54 533 Td (Main Principle) Tj ET
+BT /F3 8.5 Tf 66 504 Td (Oroex owns product, users, UX, swaps, and user ledger.) Tj ET
+BT /F3 8.5 Tf 66 492 Td (FortVault owns custody, processing, vaults, exchange credentials, blockchain execution, and secu) Tj ET
+BT /F1 10 Tf 54 468 Td (Oroex should not directly hold blockchain private keys, MPC keys, or exchange API) Tj ET
+BT /F1 10 Tf 54 455 Td (secrets.) Tj ET
+BT /F2 14 Tf 54 428 Td (High-Level Components) Tj ET
+BT /F2 12 Tf 54 397 Td (Oroex Applications) Tj ET
+BT /F1 10 Tf 54 375 Td (Oroex will have:) Tj ET
+BT /F1 10 Tf 66 357 Td (- iOS mobile application.) Tj ET
+BT /F1 10 Tf 66 344 Td (- Android mobile application.) Tj ET
+BT /F1 10 Tf 66 331 Td (- Web application.) Tj ET
+BT /F1 10 Tf 66 318 Td (- Web-based admin panel.) Tj ET
+BT /F2 12 Tf 54 294 Td (Oroex Backend) Tj ET
+BT /F1 10 Tf 54 272 Td (Oroex backend is the product API layer.) Tj ET
+BT /F1 10 Tf 54 254 Td (It owns:) Tj ET
+BT /F1 10 Tf 66 236 Td (- User-facing product logic.) Tj ET
+BT /F1 10 Tf 66 223 Td (- Swap flow.) Tj ET
+BT /F1 10 Tf 66 210 Td (- Quote display and quote acceptance.) Tj ET
+BT /F1 10 Tf 66 197 Td (- Product fees and spreads.) Tj ET
+BT /F1 10 Tf 66 184 Td (- User ledger.) Tj ET
+BT /F1 10 Tf 66 171 Td (- Available and locked balances.) Tj ET
+BT /F1 10 Tf 66 158 Td (- User withdrawal requests.) Tj ET
+BT /F1 10 Tf 66 145 Td (- Integration with FortVault APIs.) Tj ET
+BT /F1 10 Tf 66 132 Td (- Handling signed webhooks/events from FortVault.) Tj ET
+BT /F2 12 Tf 54 108 Td (Oroex User Management) Tj ET
+BT /F1 10 Tf 54 86 Td (Oroex user management owns:) Tj ET
+BT /F1 10 Tf 66 68 Td (- User registration.) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 1) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 2855 >>
+stream
+BT /F1 10 Tf 66 740 Td (- Login/authentication.) Tj ET
+BT /F1 10 Tf 66 727 Td (- User profile.) Tj ET
+BT /F1 10 Tf 66 714 Td (- KYC/AML state if required.) Tj ET
+BT /F1 10 Tf 66 701 Td (- User limits and restrictions.) Tj ET
+BT /F1 10 Tf 66 688 Td (- Mapping between Oroex users and FortVault customers.) Tj ET
+BT /F1 10 Tf 54 670 Td (For MVP, user management can be part of Oroex backend. Later it can be separated into a) Tj ET
+BT /F1 10 Tf 54 657 Td (dedicated service.) Tj ET
+BT /F2 12 Tf 54 633 Td (FortVault) Tj ET
+BT /F1 10 Tf 54 611 Td (FortVault acts as Oroex custody and processing provider.) Tj ET
+BT /F1 10 Tf 54 593 Td (It owns:) Tj ET
+BT /F1 10 Tf 66 575 Td (- Oroex workspace/partner configuration.) Tj ET
+BT /F1 10 Tf 66 562 Td (- Custody mode configuration.) Tj ET
+BT /F1 10 Tf 66 549 Td (- Vault creation and management.) Tj ET
+BT /F1 10 Tf 66 536 Td (- Customer records created through API.) Tj ET
+BT /F1 10 Tf 66 523 Td (- Customer deposit address generation.) Tj ET
+BT /F1 10 Tf 66 510 Td (- Blockchain listener events.) Tj ET
+BT /F1 10 Tf 66 497 Td (- Deposit detection and confirmation.) Tj ET
+BT /F1 10 Tf 66 484 Td (- Auto-sweep execution if enabled.) Tj ET
+BT /F1 10 Tf 66 471 Td (- On-chain withdrawal execution.) Tj ET
+BT /F1 10 Tf 66 458 Td (- MPC signing.) Tj ET
+BT /F1 10 Tf 66 445 Td (- Exchange account management.) Tj ET
+BT /F1 10 Tf 66 432 Td (- Exchange API credential protection.) Tj ET
+BT /F1 10 Tf 66 419 Td (- Exchange trade execution.) Tj ET
+BT /F1 10 Tf 66 406 Td (- Exchange balance synchronization.) Tj ET
+BT /F1 10 Tf 66 393 Td (- Operational history and audit logs.) Tj ET
+BT /F2 14 Tf 54 366 Td (FortVault Workspace Model) Tj ET
+BT /F1 10 Tf 54 341 Td (Oroex will be configured as a dedicated FortVault workspace / partner.) Tj ET
+BT /F3 8.5 Tf 66 319 Td (FortVault Workspace: Oroex) Tj ET
+BT /F3 8.5 Tf 66 307 Td (  Vaults) Tj ET
+BT /F3 8.5 Tf 66 295 Td (  Customers) Tj ET
+BT /F3 8.5 Tf 66 283 Td (  Assets) Tj ET
+BT /F3 8.5 Tf 66 271 Td (  Chains) Tj ET
+BT /F3 8.5 Tf 66 259 Td (  Exchange Accounts) Tj ET
+BT /F3 8.5 Tf 66 247 Td (  Custody Mode Settings) Tj ET
+BT /F3 8.5 Tf 66 235 Td (  Auto-Sweep Settings) Tj ET
+BT /F3 8.5 Tf 66 223 Td (  Policies) Tj ET
+BT /F1 10 Tf 54 199 Td (Oroex admins can use the existing FortVault dashboard to configure operational) Tj ET
+BT /F1 10 Tf 54 186 Td (infrastructure.) Tj ET
+BT /F2 14 Tf 54 159 Td (Custody Structures) Tj ET
+BT /F1 10 Tf 54 134 Td (FortVault should support two custody structures for Oroex, similar to Fireblocks-style) Tj ET
+BT /F1 10 Tf 54 121 Td (custody models.) Tj ET
+BT /F2 12 Tf 54 97 Td (Segregated Mode) Tj ET
+BT /F1 10 Tf 54 75 Td (In Segregated mode, each Oroex user is represented with a separated FortVault) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 2) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 2776 >>
+stream
+BT /F1 10 Tf 54 740 Td (customer/address structure.) Tj ET
+BT /F3 8.5 Tf 66 718 Td (Oroex User A -> FortVault Customer A -> User-specific deposit addresses) Tj ET
+BT /F3 8.5 Tf 66 706 Td (Oroex User B -> FortVault Customer B -> User-specific deposit addresses) Tj ET
+BT /F1 10 Tf 54 682 Td (This mode gives clearer separation of customer deposit addresses and easier) Tj ET
+BT /F1 10 Tf 54 669 Td (traceability.) Tj ET
+BT /F2 12 Tf 54 645 Td (Omnibus Mode) Tj ET
+BT /F1 10 Tf 54 623 Td (In Omnibus mode, funds are physically pooled into shared FortVault vaults, while Oroex) Tj ET
+BT /F1 10 Tf 54 610 Td (tracks user ownership in its own ledger.) Tj ET
+BT /F3 8.5 Tf 66 588 Td (User deposits -> customer address -> auto-sweep -> Oroex main vault) Tj ET
+BT /F1 10 Tf 54 564 Td (The physical funds are pooled, but the Oroex user ledger still records exact customer) Tj ET
+BT /F1 10 Tf 54 551 Td (ownership.) Tj ET
+BT /F2 12 Tf 54 527 Td (Auto-Sweep) Tj ET
+BT /F1 10 Tf 54 505 Td (Auto-sweep can be enabled per FortVault workspace.) Tj ET
+BT /F1 10 Tf 54 487 Td (Configuration examples:) Tj ET
+BT /F1 10 Tf 66 469 Td (- autoSweepEnabled.) Tj ET
+BT /F1 10 Tf 66 456 Td (- sweepTargetVaultId.) Tj ET
+BT /F1 10 Tf 66 443 Td (- sweepMinAmountByAsset.) Tj ET
+BT /F1 10 Tf 66 430 Td (- sweepConfirmationsByChain.) Tj ET
+BT /F1 10 Tf 66 417 Td (- sweepMode.) Tj ET
+BT /F1 10 Tf 54 399 Td (Auto-sweep changes physical custody location. It does not change user ownership in Oroex) Tj ET
+BT /F1 10 Tf 54 386 Td (ledger.) Tj ET
+BT /F2 14 Tf 54 359 Td (Vault Management) Tj ET
+BT /F1 10 Tf 54 334 Td (Oroex admins create vaults using the FortVault dashboard.) Tj ET
+BT /F1 10 Tf 54 316 Td (Example vaults:) Tj ET
+BT /F1 10 Tf 66 298 Td (- Main vault.) Tj ET
+BT /F1 10 Tf 66 285 Td (- Treasury vault.) Tj ET
+BT /F1 10 Tf 66 272 Td (- Hot vault.) Tj ET
+BT /F1 10 Tf 66 259 Td (- Warm vault.) Tj ET
+BT /F1 10 Tf 66 246 Td (- Cold vault.) Tj ET
+BT /F1 10 Tf 66 233 Td (- Liquidity vault.) Tj ET
+BT /F1 10 Tf 66 220 Td (- Exchange funding vault.) Tj ET
+BT /F1 10 Tf 54 202 Td (These vaults are operational custody containers. They are not the same as Oroex user) Tj ET
+BT /F1 10 Tf 54 189 Td (balances.) Tj ET
+BT /F2 14 Tf 54 162 Td (Exchange Account Management) Tj ET
+BT /F1 10 Tf 54 137 Td (Oroex admins create and manage integrated exchange accounts through the FortVault) Tj ET
+BT /F1 10 Tf 54 124 Td (dashboard.) Tj ET
+BT /F1 10 Tf 54 106 Td (FortVault stores and protects exchange credentials.) Tj ET
+BT /F1 10 Tf 54 88 Td (Exchange account configuration should include:) Tj ET
+BT /F1 10 Tf 66 70 Td (- Exchange provider, for example MEXC, Binance, Gate, Kraken.) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 3) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 2537 >>
+stream
+BT /F1 10 Tf 66 740 Td (- Account name.) Tj ET
+BT /F1 10 Tf 66 727 Td (- API key.) Tj ET
+BT /F1 10 Tf 66 714 Td (- Encrypted secret or key reference.) Tj ET
+BT /F1 10 Tf 66 701 Td (- Permissions: read balances, trade, withdraw.) Tj ET
+BT /F1 10 Tf 66 688 Td (- Status: active, disabled, archived.) Tj ET
+BT /F1 10 Tf 66 675 Td (- Optional IP whitelist notes.) Tj ET
+BT /F1 10 Tf 66 662 Td (- Workspace/partner ownership.) Tj ET
+BT /F1 10 Tf 54 644 Td (Oroex should never store exchange API secrets directly.) Tj ET
+BT /F2 14 Tf 54 617 Td (User Ledger Ownership) Tj ET
+BT /F1 10 Tf 54 592 Td (Oroex should own the product user ledger.) Tj ET
+BT /F1 10 Tf 54 574 Td (The Oroex ledger records:) Tj ET
+BT /F1 10 Tf 66 556 Td (- User available balances.) Tj ET
+BT /F1 10 Tf 66 543 Td (- User locked balances.) Tj ET
+BT /F1 10 Tf 66 530 Td (- Deposit credits.) Tj ET
+BT /F1 10 Tf 66 517 Td (- Withdrawal debits.) Tj ET
+BT /F1 10 Tf 66 504 Td (- Swap debits.) Tj ET
+BT /F1 10 Tf 66 491 Td (- Swap credits.) Tj ET
+BT /F1 10 Tf 66 478 Td (- Fees.) Tj ET
+BT /F1 10 Tf 66 465 Td (- Reversals.) Tj ET
+BT /F1 10 Tf 66 452 Td (- Adjustments.) Tj ET
+BT /F1 10 Tf 54 434 Td (FortVault records custody and processing facts:) Tj ET
+BT /F1 10 Tf 66 416 Td (- Blockchain transaction received.) Tj ET
+BT /F1 10 Tf 66 403 Td (- Address generated.) Tj ET
+BT /F1 10 Tf 66 390 Td (- Funds swept.) Tj ET
+BT /F1 10 Tf 66 377 Td (- Withdrawal submitted.) Tj ET
+BT /F1 10 Tf 66 364 Td (- Withdrawal confirmed.) Tj ET
+BT /F1 10 Tf 66 351 Td (- Exchange order created.) Tj ET
+BT /F1 10 Tf 66 338 Td (- Exchange order filled.) Tj ET
+BT /F1 10 Tf 54 320 Td (The Oroex ledger answers:) Tj ET
+BT /F3 8.5 Tf 66 298 Td (Which user owns how much?) Tj ET
+BT /F1 10 Tf 54 274 Td (FortVault answers:) Tj ET
+BT /F3 8.5 Tf 66 252 Td (Where are the funds physically and what processing happened?) Tj ET
+BT /F2 14 Tf 54 219 Td (FortVault API Integration Flow) Tj ET
+BT /F2 12 Tf 54 188 Td (1. Workspace Setup) Tj ET
+BT /F1 10 Tf 54 166 Td (Oroex gets a dedicated FortVault workspace.) Tj ET
+BT /F1 10 Tf 54 148 Td (Workspace settings define:) Tj ET
+BT /F1 10 Tf 66 130 Td (- Custody mode: Segregated or Omnibus.) Tj ET
+BT /F1 10 Tf 66 117 Td (- Auto-sweep enabled or disabled.) Tj ET
+BT /F1 10 Tf 66 104 Td (- Supported assets and chains.) Tj ET
+BT /F1 10 Tf 66 91 Td (- Policies and approval rules.) Tj ET
+BT /F1 10 Tf 66 78 Td (- Exchange integrations.) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 4) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 2521 >>
+stream
+BT /F2 12 Tf 54 740 Td (2. Vault Setup) Tj ET
+BT /F1 10 Tf 54 718 Td (Oroex admins create operational vaults in FortVault dashboard.) Tj ET
+BT /F1 10 Tf 54 700 Td (Example:) Tj ET
+BT /F3 8.5 Tf 66 678 Td (Main) Tj ET
+BT /F3 8.5 Tf 66 666 Td (Treasury) Tj ET
+BT /F3 8.5 Tf 66 654 Td (Hot) Tj ET
+BT /F3 8.5 Tf 66 642 Td (Cold) Tj ET
+BT /F3 8.5 Tf 66 630 Td (Liquidity) Tj ET
+BT /F3 8.5 Tf 66 618 Td (Exchange Funding) Tj ET
+BT /F2 12 Tf 54 588 Td (3. Exchange Setup) Tj ET
+BT /F1 10 Tf 54 566 Td (Oroex admins create exchange accounts in FortVault dashboard.) Tj ET
+BT /F1 10 Tf 54 548 Td (FortVault stores credentials and executes exchange operations through processing) Tj ET
+BT /F1 10 Tf 54 535 Td (workers.) Tj ET
+BT /F2 12 Tf 54 511 Td (4. Customer Creation) Tj ET
+BT /F1 10 Tf 54 489 Td (When a user registers in Oroex, Oroex calls FortVault to create a matching FortVault) Tj ET
+BT /F1 10 Tf 54 476 Td (customer.) Tj ET
+BT /F1 10 Tf 54 458 Td (Example API intent:) Tj ET
+BT /F3 8.5 Tf 66 436 Td (POST /customers) Tj ET
+BT /F3 8.5 Tf 66 424 Td (externalUserId = <oroex-user-id>) Tj ET
+BT /F1 10 Tf 54 400 Td (FortVault stores the external user reference so later events can be mapped back to) Tj ET
+BT /F1 10 Tf 54 387 Td (Oroex.) Tj ET
+BT /F2 12 Tf 54 363 Td (5. Deposit Address Generation) Tj ET
+BT /F1 10 Tf 54 341 Td (When a user requests a deposit address in Oroex, Oroex calls FortVault to generate or) Tj ET
+BT /F1 10 Tf 54 328 Td (retrieve an address.) Tj ET
+BT /F1 10 Tf 54 310 Td (Example API intent:) Tj ET
+BT /F3 8.5 Tf 66 288 Td (POST /customers/{customerId}/addresses) Tj ET
+BT /F3 8.5 Tf 66 276 Td (asset = USDT) Tj ET
+BT /F3 8.5 Tf 66 264 Td (chain = Tron) Tj ET
+BT /F1 10 Tf 54 240 Td (FortVault creates the address through its normal customer address generation flow.) Tj ET
+BT /F2 12 Tf 54 216 Td (6. Deposit Notification) Tj ET
+BT /F1 10 Tf 54 194 Td (When the user deposits funds, FortVault detects and confirms the transaction.) Tj ET
+BT /F1 10 Tf 54 176 Td (FortVault then sends a signed webhook/event to Oroex.) Tj ET
+BT /F1 10 Tf 54 158 Td (Example event intent:) Tj ET
+BT /F3 8.5 Tf 66 136 Td (deposit.confirmed) Tj ET
+BT /F3 8.5 Tf 66 124 Td (customerExternalUserId = <oroex-user-id>) Tj ET
+BT /F3 8.5 Tf 66 112 Td (asset = USDT) Tj ET
+BT /F3 8.5 Tf 66 100 Td (chain = Tron) Tj ET
+BT /F3 8.5 Tf 66 88 Td (amount = 1000) Tj ET
+BT /F3 8.5 Tf 66 76 Td (txHash = ...) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 5) Tj ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 2800 >>
+stream
+BT /F3 8.5 Tf 66 740 Td (confirmations = ...) Tj ET
+BT /F1 10 Tf 54 716 Td (Oroex validates the webhook signature and credits its user ledger.) Tj ET
+BT /F2 12 Tf 54 692 Td (7. Auto-Sweep Execution) Tj ET
+BT /F1 10 Tf 54 670 Td (If auto-sweep is enabled, FortVault processing can sweep funds from customer deposit) Tj ET
+BT /F1 10 Tf 54 657 Td (addresses to the configured main vault.) Tj ET
+BT /F1 10 Tf 54 639 Td (Example:) Tj ET
+BT /F3 8.5 Tf 66 617 Td (Customer deposit address -> Oroex Main Vault) Tj ET
+BT /F1 10 Tf 54 593 Td (Oroex user ledger remains unchanged. Only physical custody location changes.) Tj ET
+BT /F2 12 Tf 54 569 Td (8. Swap Request) Tj ET
+BT /F1 10 Tf 54 547 Td (When a user requests a swap, Oroex performs product-level checks.) Tj ET
+BT /F1 10 Tf 54 529 Td (Oroex checks:) Tj ET
+BT /F1 10 Tf 66 511 Td (- User available balance.) Tj ET
+BT /F1 10 Tf 66 498 Td (- User restrictions.) Tj ET
+BT /F1 10 Tf 66 485 Td (- Supported pair.) Tj ET
+BT /F1 10 Tf 66 472 Td (- Product limits.) Tj ET
+BT /F1 10 Tf 66 459 Td (- Quote expiration.) Tj ET
+BT /F1 10 Tf 66 446 Td (- Fees and spread.) Tj ET
+BT /F1 10 Tf 54 428 Td (Oroex then creates a swap order and locks user balance in Oroex ledger.) Tj ET
+BT /F2 12 Tf 54 404 Td (9. Mirror Exchange Execution) Tj ET
+BT /F1 10 Tf 54 382 Td (Oroex requests FortVault to execute the required mirror exchange operation.) Tj ET
+BT /F1 10 Tf 54 364 Td (Example API intent:) Tj ET
+BT /F3 8.5 Tf 66 342 Td (POST /exchange-orders) Tj ET
+BT /F3 8.5 Tf 66 330 Td (exchangeAccountId = MEXC Main) Tj ET
+BT /F3 8.5 Tf 66 318 Td (side = BUY) Tj ET
+BT /F3 8.5 Tf 66 306 Td (pair = BTCUSDT) Tj ET
+BT /F3 8.5 Tf 66 294 Td (quoteAmount = 1000 USDT) Tj ET
+BT /F3 8.5 Tf 66 282 Td (maxSlippage = 0.3%) Tj ET
+BT /F3 8.5 Tf 66 270 Td (externalSwapId = <oroex-swap-id>) Tj ET
+BT /F3 8.5 Tf 66 258 Td (idempotencyKey = ...) Tj ET
+BT /F1 10 Tf 54 234 Td (FortVault validates that the exchange account, pair, amount, and policy are allowed.) Tj ET
+BT /F1 10 Tf 54 216 Td (FortVault processing executes the order through the exchange API, signs requests using) Tj ET
+BT /F1 10 Tf 54 203 Td (HMAC or Ed25519 depending on exchange, and reports status back to Oroex.) Tj ET
+BT /F2 12 Tf 54 179 Td (10. Swap Completion) Tj ET
+BT /F1 10 Tf 54 157 Td (After exchange execution completes, FortVault sends a signed event to Oroex.) Tj ET
+BT /F1 10 Tf 54 139 Td (Example event intent:) Tj ET
+BT /F3 8.5 Tf 66 117 Td (exchange.order.filled) Tj ET
+BT /F3 8.5 Tf 66 105 Td (externalSwapId = <oroex-swap-id>) Tj ET
+BT /F3 8.5 Tf 66 93 Td (fromAsset = USDT) Tj ET
+BT /F3 8.5 Tf 66 81 Td (toAsset = BTC) Tj ET
+BT /F3 8.5 Tf 66 69 Td (executedAmount = ...) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 6) Tj ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 14 0 R >>
+endobj
+16 0 obj
+<< /Length 2594 >>
+stream
+BT /F3 8.5 Tf 66 740 Td (averagePrice = ...) Tj ET
+BT /F3 8.5 Tf 66 728 Td (fee = ...) Tj ET
+BT /F1 10 Tf 54 704 Td (Oroex finalizes the user ledger:) Tj ET
+BT /F1 10 Tf 66 686 Td (- Debits source asset.) Tj ET
+BT /F1 10 Tf 66 673 Td (- Credits destination asset.) Tj ET
+BT /F1 10 Tf 66 660 Td (- Applies fees.) Tj ET
+BT /F1 10 Tf 66 647 Td (- Releases locked balance.) Tj ET
+BT /F2 12 Tf 54 623 Td (11. Withdrawal Request) Tj ET
+BT /F1 10 Tf 54 601 Td (When a user requests withdrawal, Oroex validates the user ledger balance and creates a) Tj ET
+BT /F1 10 Tf 54 588 Td (withdrawal intent.) Tj ET
+BT /F1 10 Tf 54 570 Td (Oroex then calls FortVault.) Tj ET
+BT /F1 10 Tf 54 552 Td (Example API intent:) Tj ET
+BT /F3 8.5 Tf 66 530 Td (POST /withdrawals) Tj ET
+BT /F3 8.5 Tf 66 518 Td (customerId = ...) Tj ET
+BT /F3 8.5 Tf 66 506 Td (asset = USDT) Tj ET
+BT /F3 8.5 Tf 66 494 Td (chain = Tron) Tj ET
+BT /F3 8.5 Tf 66 482 Td (amount = 100) Tj ET
+BT /F3 8.5 Tf 66 470 Td (toAddress = T...) Tj ET
+BT /F3 8.5 Tf 66 458 Td (idempotencyKey = ...) Tj ET
+BT /F1 10 Tf 54 434 Td (FortVault handles custody checks, policies, approvals if required, MPC signing,) Tj ET
+BT /F1 10 Tf 54 421 Td (broadcast, and status tracking.) Tj ET
+BT /F2 12 Tf 54 397 Td (12. Withdrawal Status Notification) Tj ET
+BT /F1 10 Tf 54 375 Td (FortVault sends signed webhook events back to Oroex.) Tj ET
+BT /F1 10 Tf 54 357 Td (Example events:) Tj ET
+BT /F3 8.5 Tf 66 335 Td (withdrawal.pending_approval) Tj ET
+BT /F3 8.5 Tf 66 323 Td (withdrawal.broadcasted) Tj ET
+BT /F3 8.5 Tf 66 311 Td (withdrawal.confirmed) Tj ET
+BT /F3 8.5 Tf 66 299 Td (withdrawal.failed) Tj ET
+BT /F1 10 Tf 54 275 Td (Oroex updates user ledger and status based on the result.) Tj ET
+BT /F2 14 Tf 54 248 Td (API Security Requirements) Tj ET
+BT /F1 10 Tf 54 223 Td (All Oroex -> FortVault API calls should use:) Tj ET
+BT /F1 10 Tf 66 205 Td (- Workspace-scoped API credentials.) Tj ET
+BT /F1 10 Tf 66 192 Td (- Strong authentication.) Tj ET
+BT /F1 10 Tf 66 179 Td (- Idempotency keys for create/execute requests.) Tj ET
+BT /F1 10 Tf 66 166 Td (- Request timestamps.) Tj ET
+BT /F1 10 Tf 66 153 Td (- Request signatures where needed.) Tj ET
+BT /F1 10 Tf 66 140 Td (- Partner/workspace scoping.) Tj ET
+BT /F1 10 Tf 54 122 Td (All FortVault -> Oroex webhooks should use:) Tj ET
+BT /F1 10 Tf 66 104 Td (- Signed webhook payloads.) Tj ET
+BT /F1 10 Tf 66 91 Td (- Timestamp validation.) Tj ET
+BT /F1 10 Tf 66 78 Td (- Replay protection.) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 7) Tj ET
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Length 2695 >>
+stream
+BT /F1 10 Tf 66 740 Td (- Event IDs for idempotency.) Tj ET
+BT /F1 10 Tf 66 727 Td (- Retry-safe delivery.) Tj ET
+BT /F2 14 Tf 54 700 Td (Processing Boundary) Tj ET
+BT /F1 10 Tf 54 675 Td (FortVault processing executes external and asynchronous operations.) Tj ET
+BT /F1 10 Tf 54 657 Td (Processing is responsible for:) Tj ET
+BT /F1 10 Tf 66 639 Td (- Auto-sweep jobs.) Tj ET
+BT /F1 10 Tf 66 626 Td (- Blockchain transaction execution.) Tj ET
+BT /F1 10 Tf 66 613 Td (- MPC signing requests.) Tj ET
+BT /F1 10 Tf 66 600 Td (- Exchange API calls.) Tj ET
+BT /F1 10 Tf 66 587 Td (- Exchange order status polling.) Tj ET
+BT /F1 10 Tf 66 574 Td (- Exchange balance synchronization.) Tj ET
+BT /F1 10 Tf 66 561 Td (- Retry and idempotency handling.) Tj ET
+BT /F1 10 Tf 66 548 Td (- Execution result events.) Tj ET
+BT /F1 10 Tf 54 530 Td (Processing should not own Oroex user ledger. It should emit verified facts that Oroex) Tj ET
+BT /F1 10 Tf 54 517 Td (ledger can consume.) Tj ET
+BT /F2 14 Tf 54 490 Td (Accounting Boundary) Tj ET
+BT /F1 10 Tf 54 465 Td (Oroex ledger owns product balances.) Tj ET
+BT /F1 10 Tf 54 447 Td (FortVault custody records own custody facts.) Tj ET
+BT /F1 10 Tf 54 429 Td (Example:) Tj ET
+BT /F3 8.5 Tf 66 407 Td (Deposit confirmed:) Tj ET
+BT /F3 8.5 Tf 66 395 Td (  FortVault event: address A received 1000 USDT) Tj ET
+BT /F3 8.5 Tf 66 383 Td (  Oroex ledger: user I +1000 USDT) Tj ET
+BT /F3 8.5 Tf 66 367 Td (Auto-sweep completed:) Tj ET
+BT /F3 8.5 Tf 66 355 Td (  FortVault event: funds moved to Main Vault) Tj ET
+BT /F3 8.5 Tf 66 343 Td (  Oroex ledger: no ownership change) Tj ET
+BT /F3 8.5 Tf 66 327 Td (Swap completed:) Tj ET
+BT /F3 8.5 Tf 66 315 Td (  FortVault event: mirror exchange order filled) Tj ET
+BT /F3 8.5 Tf 66 303 Td (  Oroex ledger: user I -1000 USDT, +BTC) Tj ET
+BT /F2 14 Tf 54 270 Td (Exchange Connectivity) Tj ET
+BT /F1 10 Tf 54 245 Td (For MVP, exchange integration should use HTTPS REST APIs.) Tj ET
+BT /F1 10 Tf 54 227 Td (REST is used for:) Tj ET
+BT /F1 10 Tf 66 209 Td (- Account balances.) Tj ET
+BT /F1 10 Tf 66 196 Td (- Market orders.) Tj ET
+BT /F1 10 Tf 66 183 Td (- Order status.) Tj ET
+BT /F1 10 Tf 66 170 Td (- Deposit addresses.) Tj ET
+BT /F1 10 Tf 66 157 Td (- Withdrawals.) Tj ET
+BT /F1 10 Tf 66 144 Td (- Withdrawal history.) Tj ET
+BT /F1 10 Tf 66 131 Td (- Asset and network metadata.) Tj ET
+BT /F1 10 Tf 54 113 Td (WebSocket can be added later for:) Tj ET
+BT /F1 10 Tf 66 95 Td (- Live prices.) Tj ET
+BT /F1 10 Tf 66 82 Td (- Faster balance updates.) Tj ET
+BT /F1 10 Tf 66 69 Td (- Order execution updates.) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 8) Tj ET
+endstream
+endobj
+19 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 18 0 R >>
+endobj
+20 0 obj
+<< /Length 2545 >>
+stream
+BT /F1 10 Tf 66 740 Td (- Market data streaming.) Tj ET
+BT /F2 14 Tf 54 713 Td (Exchange Signing) Tj ET
+BT /F1 10 Tf 54 688 Td (Different exchanges use different authentication models.) Tj ET
+BT /F1 10 Tf 54 670 Td (Examples:) Tj ET
+BT /F1 10 Tf 66 652 Td (- MEXC: HMAC-SHA256.) Tj ET
+BT /F1 10 Tf 66 639 Td (- Gate: HMAC-SHA512.) Tj ET
+BT /F1 10 Tf 66 626 Td (- Kraken: HMAC-SHA512-based signing.) Tj ET
+BT /F1 10 Tf 66 613 Td (- Binance: HMAC or self-generated Ed25519/RSA API keys.) Tj ET
+BT /F1 10 Tf 54 595 Td (For MVP:) Tj ET
+BT /F1 10 Tf 66 577 Td (- HMAC exchanges can be supported using protected exchange secrets.) Tj ET
+BT /F1 10 Tf 66 564 Td (- Binance Ed25519 self-generated keys can later use FortVault MPC EdDSA signing.) Tj ET
+BT /F2 14 Tf 54 537 Td (Provider Independence) Tj ET
+BT /F1 10 Tf 54 512 Td (Oroex should treat FortVault as the first processing provider, not as a hardcoded) Tj ET
+BT /F1 10 Tf 54 499 Td (product dependency.) Tj ET
+BT /F1 10 Tf 54 481 Td (Future possible providers:) Tj ET
+BT /F1 10 Tf 66 463 Td (- FortVault.) Tj ET
+BT /F1 10 Tf 66 450 Td (- Fireblocks.) Tj ET
+BT /F1 10 Tf 66 437 Td (- AlphaPo.) Tj ET
+BT /F1 10 Tf 66 424 Td (- Other custody or processing providers.) Tj ET
+BT /F1 10 Tf 54 406 Td (Oroex should depend on a provider abstraction:) Tj ET
+BT /F3 8.5 Tf 66 384 Td (createCustomer) Tj ET
+BT /F3 8.5 Tf 66 372 Td (createDepositAddress) Tj ET
+BT /F3 8.5 Tf 66 360 Td (requestWithdrawal) Tj ET
+BT /F3 8.5 Tf 66 348 Td (requestExchangeExecution) Tj ET
+BT /F3 8.5 Tf 66 336 Td (getOperationStatus) Tj ET
+BT /F3 8.5 Tf 66 324 Td (receiveProviderEvents) Tj ET
+BT /F1 10 Tf 54 300 Td (FortVault is the first implementation of that provider interface.) Tj ET
+BT /F2 14 Tf 54 273 Td (Summary) Tj ET
+BT /F3 8.5 Tf 66 244 Td (Oroex:) Tj ET
+BT /F3 8.5 Tf 66 232 Td (  Product, users, swaps, user ledger, UX, admin experience.) Tj ET
+BT /F3 8.5 Tf 66 216 Td (FortVault:) Tj ET
+BT /F3 8.5 Tf 66 204 Td (  Workspace, custody, vaults, addresses, MPC, processing, exchange credentials, execution, audit) Tj ET
+BT /F3 8.5 Tf 66 188 Td (Integration:) Tj ET
+BT /F3 8.5 Tf 66 176 Td (  Oroex calls FortVault APIs.) Tj ET
+BT /F3 8.5 Tf 66 164 Td (  FortVault sends signed events back to Oroex.) Tj ET
+BT /F1 10 Tf 54 140 Td (This architecture keeps Oroex flexible as a product while using FortVault as the secure) Tj ET
+BT /F1 10 Tf 54 127 Td (custody and processing infrastructure.) Tj ET
+BT /F1 8 Tf 54 30 Td (Oroex and FortVault - High-Level Platform Architecture) Tj ET
+BT /F1 8 Tf 518 30 Td (Page 9) Tj ET
+endstream
+endobj
+21 0 obj
+<< /Type /Page /Parent 22 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 20 0 R >>
+endobj
+22 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R 11 0 R 13 0 R 15 0 R 17 0 R 19 0 R 21 0 R] /Count 9 >>
+endobj
+23 0 obj
+<< /Type /Catalog /Pages 22 0 R >>
+endobj
+xref
+0 24
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000160 00000 n 
+0000000228 00000 n 
+0000003002 00000 n 
+0000003149 00000 n 
+0000006056 00000 n 
+0000006203 00000 n 
+0000009031 00000 n 
+0000009178 00000 n 
+0000011768 00000 n 
+0000011917 00000 n 
+0000014491 00000 n 
+0000014640 00000 n 
+0000017493 00000 n 
+0000017642 00000 n 
+0000020289 00000 n 
+0000020438 00000 n 
+0000023186 00000 n 
+0000023335 00000 n 
+0000025933 00000 n 
+0000026082 00000 n 
+0000026194 00000 n 
+trailer
+<< /Size 24 /Root 23 0 R >>
+startxref
+26245
+%%EOF

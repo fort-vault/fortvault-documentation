@@ -2,11 +2,11 @@
 
 Status: FortX Connect API integration guide
 
-Document version: `0.1`
+Document version: `0.2`
 
 API version: `v1`
 
-Last reviewed: 2026-09-29
+Last reviewed: 2026-10-08
 
 ## 1. Purpose
 
@@ -493,8 +493,7 @@ Each customer asset has four balance amounts. They do not overlap. None of them 
 | `frozenAmountBaseUnits`      | Frozen      | Compliance hold on funds already attributed to the customer. Not spendable.                                    |
 
 
-`totalAmountBaseUnits` is the credited balance: Available + Locked + Frozen. Unconfirmed is returned beside it and is not part of that credited total. A market order that completes in one transaction does not leave a Locked balance after the response. A withdrawal moves the reserved amount from Available to Locked until it settles. When FortX observes an inbound transfer to the issued deposit address, it
-credits Available unless a review holds the credit first. While that review holds the credit, the amount is Unconfirmed. Crediting moves it from Unconfirmed to Available. A compliance hold of funds already credited moves them from Available to Frozen. Releasing that hold moves them back. A positive Available balance is not permission to trade or withdraw.
+`totalAmountBaseUnits` is the credited balance: Available + Locked + Frozen. Unconfirmed is returned beside it and is not part of that credited total. A market order that completes in one transaction does not leave a Locked balance after the response. A withdrawal moves the reserved amount from Available to Locked until it settles. An observed inbound transfer awaiting the configured chain-confirmation requirement has deposit status `confirming` and remains Unconfirmed. Once that requirement is satisfied, FortX credits Available unless a review holds the credit first. A deposit in `under_review` also remains Unconfirmed. Crediting moves the amount from Unconfirmed to Available exactly once. A rejected deposit contributes nothing to Unconfirmed or the credited total; rejection does not itself return the on-chain funds. A compliance hold of funds already credited moves them from Available to Frozen. Releasing that hold moves them back. A positive Available balance is not permission to trade or withdraw.
 
 The portfolio denomination is USDT, not fiat USD. Backend-calculated valuation uses the quote asset's decimals, carries its own freshness state, and is informational. It covers Available, Locked, and Frozen. It excludes Unconfirmed, because that amount is still pending incoming. Unavailable valuation has null amount and timestamps rather than a zero amount. The frontend must not present Available as if it included the other three, must not show an incomplete sum as a complete portfolio total, must not sum only one page, and must not combine different quote denominations.
 
@@ -764,24 +763,41 @@ nullable `memo`, nullable `transactionHash`, nullable `blockTimestamp`,
 The deposit resource does not include `confirmations` or `requiredConfirmations`.
 
 FortX does not expose a confirmation count or a finalized flag. An observed
-inbound transfer to the issued deposit address is treated as confirmed for
-crediting. FortX correlates deposits by stable identifiers such as `txHash`,
+inbound transfer awaiting the configured chain-confirmation requirement is
+`confirming`, not eligible for crediting. Confirmation readiness comes from
+the custody integration; the frontend must not infer it from a transaction hash,
+block timestamp, or elapsed time. FortX correlates deposits by stable identifiers such as `txHash`,
 `chainRef`, asset, address, and exact amount. The same inbound transfer credits
 the customer once.
 
 
 | Status         | Meaning                                                                      |
 | -------------- | ---------------------------------------------------------------------------- |
+| `confirming`   | The movement is observed, but the configured chain-confirmation requirement is not yet satisfied. Not credited or spendable. |
 | `under_review` | The movement is confirmed, and crediting is waiting on a compliance decision |
 | `credited`     | The confirmed movement has been credited to Available                        |
 | `rejected`     | The confirmed movement was not credited; customer-safe next step provided    |
 
 
-There is no `confirming` status. `creditedAmountBaseUnits` is zero until `credited`. A movement that is credited immediately does not pass through Unconfirmed. A movement held in `under_review` stays Unconfirmed until it is credited or rejected. A compliance hold of funds already credited is Frozen, not Unconfirmed. A rejected deposit does not mean the funds were automatically returned. A provider notification, transaction hash, or frontend SDK result does not by
-itself credit the customer. A credited deposit appears through this API when
-FortX accepts the inbound transfer.
+`creditedAmountBaseUnits` is zero and `creditedAt` is null until `credited`.
+A movement in `confirming` or `under_review` stays Unconfirmed until it is
+credited or rejected. After confirmation, it can move directly to `credited`
+or to `under_review`; a review resolves to `credited` or `rejected`. A movement
+first received with sufficient confirmation evidence can skip `confirming`.
+Clients must tolerate skipped intermediate states when polling.
 
-Deposit controls are separate from whether an address already exists. Stopping new deposit instructions does not stop a transfer to an address that was already issued. FortX still records the incoming movement. It does not drop it because the customer is restricted. The controlled steps are: issuing instructions, recording the movement, crediting it or holding it for review, and then leaving the credited amount Available or moving it to Frozen.
+A compliance hold of funds already credited is Frozen, not Unconfirmed.
+A rejected deposit does not mean the funds were automatically returned.
+A provider notification, transaction hash, or frontend SDK result does not by
+itself credit the customer. A credited deposit appears through this API only
+after FortX accepts the confirmation evidence and required crediting checks.
+
+The `confirming` lifecycle is part of the documented delivery contract.
+Exposing it requires backend and custody integration support; this guide update
+does not establish that support as implemented. The current FortVault Partner
+API does not expose confirmation counts or a finalized flag.
+
+Deposit controls are separate from whether an address already exists. Stopping new deposit instructions does not stop a transfer to an address that was already issued. FortX still records the incoming movement. It does not drop it because the customer is restricted. The controlled steps are: issuing instructions, recording the movement, waiting for the configured chain-confirmation requirement, crediting it or holding it for review, and then leaving the credited amount Available or moving it to Frozen.
 
 Duplicate delivery of the same inbound transfer must not credit twice. An empty
 deposit list is not proof that a transfer failed. A later chain reorganization
@@ -978,7 +994,7 @@ for credits, debits, fees, releases, and any correction.
 | Idempotency    | Same request replay, different-body conflict, concurrent retry, refresh across attempts                                                                        |
 | Error replay   | Original body ID/timestamp preserved; new header ID; deterministic versus transient errors                                                                     |
 | Recovery       | Lost response before/after commit, app restart, unknown provider result, retention boundary                                                                    |
-| Deposits       | Repeated address requests, memo/network validation, duplicate observation, review, reorganization                                                              |
+| Deposits       | Repeated address requests, memo/network validation, `confirming` stays uncredited and unspendable, confirmation-to-credit/review transitions, skipped intermediate states, duplicate observation without double credit, rejection, reorganization |
 | Withdrawals    | Recipient amount equals the amount sent; submitted fee must match the current rate or the request fails with `FEE_CHANGED`; failed send releases the full lock |
 | Accounting     | Available, Locked, Unconfirmed, and Frozen do not overlap and are never negative; no duplicate credit or treasury-sweep customer deposit                       |
 | History        | Every filter; ASC/DESC ties; fixed-dataset paging; scoped totals; no treasury-only rows                                                                        |

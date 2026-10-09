@@ -1,5 +1,7 @@
 # FortVault Smart Contracts - High-Level Description
 
+> For the current offer scope and qualification status, see [FortVault Custody - Product and Technical Overview](../products/fortvault-custody.md). Contract source and deployment tooling do not establish which version is deployed in a particular environment.
+
 ## Purpose
 
 FortVault smart contracts provide an on-chain policy and registry layer for the custody platform. They define action types, wallet types, asset types, business roles, role assignments, and policy rules used by backend, processing, and MPC-related services.
@@ -12,7 +14,10 @@ The smart-contract package can include:
 
 - `FortVaultRegistry`
 - `FortVaultPolicyEngine`
+- `FortVaultPolicyEngineV2`
 - `FortVaultAddressVerifier`
+
+Current deployment tooling targets `FortVaultPolicyEngineV2`. The earlier policy engine remains in the source tree; existing deployments must be inventoried rather than assumed upgraded. The policy descriptions below are high-level concepts, not a substitute for version-specific caller compatibility.
 
 Together, these contracts model:
 
@@ -154,13 +159,7 @@ It is designed to validate that an address was generated/attested by a trusted s
 - public key,
 - issuance timestamp.
 
-The verifier stores:
-
-- trusted signer list,
-- active signer count,
-- required signature threshold.
-
-Verification succeeds only if enough unique trusted signers signed the expected attestation digest.
+The reviewed verifier stores a trusted signer set established by its constructor. Verification requires a valid signature from every configured trusted signer, with duplicate signers counted only once. It does not expose an independently configurable k-of-n attestation threshold. This requirement is separate from the MPC transaction-signing quorum.
 
 This contract can be used by external systems or partners to verify that a generated address belongs to the expected FortVault MPC-controlled context.
 
@@ -193,7 +192,7 @@ Expected address-format values can include:
 
 This keeps MPC focused on key ownership while the verifier contract handles address-format validation. For example, the same ECDSA public key can be represented as an EVM address, a Tron address, or a Bitcoin P2WPKH address, depending on the selected format.
 
-The verifier validates that enough unique trusted MPC attestation signers signed the expected digest. The threshold and signer set are configured in the verifier contract.
+The verifier validates that all configured trusted MPC attestation signers signed the expected digest. The signer set is configured at contract construction.
 
 The proof can be kept intentionally compact and does not need to include salt, verifier contract address, or verifier chain ID when verification is based on possession of the signed proof and the verifier contract's trusted signer set.
 

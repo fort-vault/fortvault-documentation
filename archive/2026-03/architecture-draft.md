@@ -1,12 +1,14 @@
 # FortVault Custody Platform
 ## Architecture and Control Overview (Regulatory Submission Draft)
 
+> Historical architecture draft, originally prepared in March 2026. For the September 2026 offer scope and implementation-status distinctions, use [FortVault Custody - Product and Technical Overview](../../products/fortvault-custody.md). The diagram below predates Exchange Processing and does not represent the complete current product. It is retained pending diagram review; it must not be attached to the new offer as current architecture evidence.
+
 Date: March 9, 2026  
 Prepared for: Partner regulatory review
 
 ## 1. Executive Summary
 FortVault is a multi-service digital asset custody platform with strict separation of duties:
-- `fortvault-processing` is the only component allowed to request signatures and broadcast on-chain transactions.
+- `fortvault-processing` coordinates custody signatures and broadcasts custody blockchain transactions. The separate `fortvault-exchange-processing` service requests exchange-authentication signatures through its dedicated MPC path; it does not broadcast custody transactions.
 - `fortvault-mpc` (3-node MPC cluster) holds signing key shares and performs threshold cryptography.
 - Administrative systems (`backend`, `frontend`) can initiate actions but cannot sign or broadcast.
 
@@ -16,6 +18,7 @@ This design reduces compromise blast radius and centralizes transaction executio
 - `fortvault-frontend` (React): admin/partner user interface.
 - `fortvault-backend` (Node.js): back-office API, primary business-logic layer, and system of record for customer/partner/admin domain data (customer profiles, vault metadata, operational actions, and related back-office entities). It orchestrates workflows and publishes custody commands/events.
 - `fortvault-processing` (Node.js): custody execution engine (address generation, transfer orchestration, transfer authorization verification, MPC integration, broadcast, state machine, idempotency).
+- `fortvault-exchange-processing` (Node.js): exchange-provider execution, credential resolution, durable exchange-operation state, and dedicated exchange MPC coordination. Existing connectivity does not imply that unified swap execution is implemented.
 - `fortvault-mpc` (Go): distributed threshold-signing service (key shares, keygen, derive, sign, independent transaction/policy verification before signing).
 - `fortvault-listener` (Node.js): blockchain event listener (deposit/confirmation/tx status feeds).
 - `fortvault-notification` (Node.js): outbound notifications (email/Telegram).
@@ -92,22 +95,11 @@ flowchart LR
   NOTI --> TG["Telegram"]:::comm
 ```
 
-## 4. Trust and Threat Model (MVP)
-Trusted:
-- `fortvault-processing`
-- `fortvault-mpc`
-- authorized human approvers
+## 4. Signing Trust Boundary
 
-Potentially compromised:
-- backend
-- frontend
-- listener
-- notification
-- Redis transport
+Backend, Frontend, Custody Processing, Exchange Processing, Listener, Notification, and Redis must be treated as potentially compromised when evaluating signing authorization. Processing coordinates execution; it is not sufficient authority for MPC to sign merely because it reports that an action was approved.
 
-Security consequence:
-- Compromise of non-trusted services does not grant signing or direct broadcast capability.
-- Final custody execution remains gated by processing controls and MPC threshold signing.
+Custody MPC contains independent transaction, signature, and configured policy-verification paths. Required controls must be enabled and validated in the deployed configuration. This draft is not proof that every intended authorization or replay invariant is enforced in every path. Exchange MPC authentication is separate and does not by itself establish policy-authorized swap execution.
 
 ## 5. Control Architecture
 ### 5.1 Separation of Duties

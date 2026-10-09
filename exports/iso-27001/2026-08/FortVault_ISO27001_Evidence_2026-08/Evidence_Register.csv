@@ -1,0 +1,18 @@
+Control / evidence area,Package artifact,Evidence basis,Status,Owner,Package date,Classification
+Package index,00_README.pdf,Source-controlled,Included,FortVault,2026-08-28,Confidential
+FortVault component architecture,01_Architecture/FortVault_Component_Architecture.pdf,Source-reviewed architecture,Included,FortVault,2026-08-28,Confidential
+FortX component architecture,01_Architecture/FortX_Component_Architecture.pdf,Source-reviewed current/planned architecture,Included,FortVault,2026-08-28,Confidential
+Combined platform architecture,01_Architecture/FortVault_FortX_Platform_Architecture.pdf,Source-reviewed architecture,Included,FortVault,2026-08-28,Confidential
+Custody technical overview,01_Architecture/FortVault_Custody_Technical_Overview.pdf,Source-reviewed technical overview,Included,FortVault,2026-08-28,Confidential
+Exchange technical overview,01_Architecture/FortVault_Exchange_Technical_Overview.pdf,Source-reviewed limited scope,Included,FortVault,2026-08-28,Confidential
+"Testing, health, logging and encryption",02_Source_Controlled_Evidence/Testing_Health_Logging_and_Encryption.pdf,Source-controlled implementation evidence,Included,FortVault,2026-08-28,Confidential
+README and architecture index,02_Source_Controlled_Evidence/README_and_Architecture_Index.pdf,Controlled sharing index,Included,FortVault,2026-08-28,Confidential
+GitHub component README examples,02_Source_Controlled_Evidence/GitHub_Component_README_Examples.pdf,Sanitized revision-bound README excerpts,Included,FortVault,2026-08-28,Confidential
+Cloud deployment diagram,03_Operational_Evidence/Cloud_Deployment_and_Trust_Boundaries.pdf,Management-provided current-state topology,Included - management review required,FortVault,2026-08-28,Confidential
+Cloud configuration,03_Operational_Evidence/Cloud_Infrastructure_and_Configuration.pdf,Management-provided current-state description,Included - console evidence pending,FortVault,2026-08-28,Confidential
+Backup and restore,03_Operational_Evidence/Backup_and_Restore_Configuration.pdf,Management-provided current-state description,Included - restore evidence pending,FortVault,2026-08-28,Confidential
+Operational evidence checklist,03_Operational_Evidence/Operational_Evidence_Checklist.pdf,Collection checklist,Included,FortVault,2026-08-28,Confidential
+Centralized production logging,03_Operational_Evidence/PENDING_INFORMATION.txt,Operational evidence,Known gap - not configured,FortVault,2026-08-28,Confidential
+Production TLS and encryption,03_Operational_Evidence/PENDING_INFORMATION.txt,Operational evidence,Pending,FortVault,2026-08-28,Confidential
+Endpoint OS and updates,03_Operational_Evidence/PENDING_INFORMATION.txt,Operational evidence,Pending,FortVault,2026-08-28,Confidential
+Release-specific test results,03_Operational_Evidence/PENDING_INFORMATION.txt,Runtime/release evidence,Pending,FortVault,2026-08-28,Confidential
